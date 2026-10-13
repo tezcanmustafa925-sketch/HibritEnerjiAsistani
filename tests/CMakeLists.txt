@@ -9,3 +9,4 @@ function(hea_add_test name)
 endfunction()
 
 hea_add_test(test_smoke)
+hea_add_test(test_types)
