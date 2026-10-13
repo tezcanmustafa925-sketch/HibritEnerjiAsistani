@@ -1,0 +1,28 @@
+# Derleme çıktıları
+build/
+out/
+x64/
+x86/
+Debug/
+Release/
+*.obj
+*.pdb
+*.ilk
+*.exe
+*.lib
+
+# IDE dosyaları
+.vs/
+.vscode/
+*.vcxproj.user
+CMakeUserPresets.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Simülasyon çıktıları
+*.csv
+!data/**/*.csv
