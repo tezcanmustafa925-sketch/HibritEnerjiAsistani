@@ -1,5 +1,10 @@
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
+#include <cstring>
+#include <vector>
 
+#include "hea/drive_cycle.h"
 #include "hea/electric_motor.h"
 #include "hea/engine.h"
 #include "hea/units.h"
@@ -69,15 +74,45 @@ static void printMotorEfficiencyMap(const hea::ElectricMotor& motor)
     }
 }
 
-int main()
+// Çevrim kümesinin özet tablosu (hızlar km/h).
+static void printCycleTable(const char* title, const std::vector<hea::DriveCycle>& cycles)
+{
+    using hea::units::mpsToKmh;
+    std::printf("\n%s\n", title);
+    std::printf("%-11s %7s %8s %8s %8s %6s %7s %7s %6s %5s\n", "cevrim", "sure[s]",
+                "yol[km]", "ort km/h", "max km/h", "dur[%]", "egim+[%]", "egim-[%]",
+                "yuk[kg]", "T[C]");
+    for (const hea::DriveCycle& c : cycles) {
+        double gMax = 0.0;
+        double gMin = 0.0;
+        for (const hea::DriveInput& s : c.samples) {
+            gMax = std::max(gMax, std::tan(s.grade_rad) * 100.0);
+            gMin = std::min(gMin, std::tan(s.grade_rad) * 100.0);
+        }
+        const hea::DriveInput& first = c.samples.front();
+        std::printf("%-11s %7.0f %8.2f %8.1f %8.1f %6.1f %7.1f %8.1f %7.0f %5.0f\n",
+                    c.name.c_str(), c.duration_s(), c.distance_m() / 1000.0,
+                    mpsToKmh(c.averageSpeed_mps()), mpsToKmh(c.maxSpeed_mps()),
+                    100.0 * c.stopFraction(), gMax, gMin, first.payload_kg,
+                    first.ambientTemp_C);
+    }
+}
+
+int main(int argc, char** argv)
 {
     // Ekrana yazma işi yalnızca uygulama katmanında yapılır, core'da değil.
     std::printf("Akilli Hibrit Enerji Asistani (core %s)\n", hea::coreVersion());
 
-    const hea::VehicleModel model{hea::VehicleParams{}};
-    printRoadLoadTable(model, 0.0);
-    printRoadLoadTable(model, 5.0);
-    printBsfcMap(hea::Engine{hea::EngineParams{}});
-    printMotorEfficiencyMap(hea::ElectricMotor{hea::MotorParams{}});
+    // --tablolar: bileşen modellerinin kontrol tablolarını da göster
+    if (argc > 1 && std::strcmp(argv[1], "--tablolar") == 0) {
+        const hea::VehicleModel model{hea::VehicleParams{}};
+        printRoadLoadTable(model, 0.0);
+        printRoadLoadTable(model, 5.0);
+        printBsfcMap(hea::Engine{hea::EngineParams{}});
+        printMotorEfficiencyMap(hea::ElectricMotor{hea::MotorParams{}});
+    }
+
+    printCycleTable("EGITIM CEVRIMLERI", hea::trainingCycles());
+    printCycleTable("TEST CEVRIMLERI", hea::testCycles());
     return 0;
 }

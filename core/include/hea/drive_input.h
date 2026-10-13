@@ -19,6 +19,8 @@ struct DriveInput {
     double grade_rad = 0.0;
     // Araca binen ek yük: sürücü + yolcu + bagaj [kg]
     double payload_kg = 75.0;
+    // Ortam sıcaklığı [°C]; batarya ısıl modeli için
+    double ambientTemp_C = 25.0;
 };
 
 } // namespace hea
