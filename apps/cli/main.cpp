@@ -5,6 +5,8 @@
 #include <vector>
 
 #include "hea/drive_cycle.h"
+#include "hea/simulation.h"
+#include "hea/strategy.h"
 #include "hea/electric_motor.h"
 #include "hea/engine.h"
 #include "hea/units.h"
@@ -98,6 +100,28 @@ static void printCycleTable(const char* title, const std::vector<hea::DriveCycle
     }
 }
 
+// Geçici (7. adımda ayrıntılı çıktıyla değişecek): her çevrimi verilen stratejiyle
+// çalıştırıp tek satırlık özet yazar.
+static void printRunTable(const std::vector<hea::DriveCycle>& cycles, hea::Strategy& strategy)
+{
+    const hea::SimulationConfig cfg;
+    std::printf("\nStrateji: %s\n", strategy.name());
+    std::printf("%-11s %8s %8s %6s %6s %6s %6s %6s %6s %7s %7s\n", "cevrim", "L/100km",
+                "yakit[L]", "SOC0", "SOC1", "EV[%]", "ICE[%]", "REG[%]", "DUR[%]",
+                "rejen", "surt.fr");
+    std::printf("%-11s %8s %8s %6s %6s %6s %6s %6s %6s %7s %7s\n", "", "", "", "", "", "",
+                "", "", "", "[Wh]", "[Wh]");
+    for (const hea::DriveCycle& c : cycles) {
+        const auto steps = hea::runCycle(cfg, c, strategy);
+        const hea::RunSummary s = hea::summarize(steps, cfg.initialSoc);
+        std::printf("%-11s %8.2f %8.3f %6.3f %6.3f %6.1f %6.1f %6.1f %6.1f %7.0f %7.0f\n",
+                    c.name.c_str(), s.fuelPer100km_L, s.fuel_L, s.socStart, s.socEnd,
+                    100.0 * s.timeElectric, 100.0 * s.timeEngine, 100.0 * s.timeRegen,
+                    100.0 * s.timeStopped, s.regenEnergy_J / 3600.0,
+                    s.frictionBrakeEnergy_J / 3600.0);
+    }
+}
+
 int main(int argc, char** argv)
 {
     // Ekrana yazma işi yalnızca uygulama katmanında yapılır, core'da değil.
@@ -114,5 +138,11 @@ int main(int argc, char** argv)
 
     printCycleTable("EGITIM CEVRIMLERI", hea::trainingCycles());
     printCycleTable("TEST CEVRIMLERI", hea::testCycles());
+
+    const auto tests = hea::testCycles();
+    hea::FixedModeStrategy iceOnly(hea::Mode::Engine);
+    hea::FixedModeStrategy evFirst(hea::Mode::Electric);
+    printRunTable(tests, iceOnly);
+    printRunTable(tests, evFirst);
     return 0;
 }

@@ -89,6 +89,10 @@ public:
 
     PowertrainResult resolve(const PowertrainRequest& req) const;
 
+    // Bu tekerlek devrinde iki motorun birlikte verebileceği en büyük tekerlek
+    // torku [Nm] (batarya sınırı hariç). Gaz pedalı konumunu normalize etmek için.
+    double maxWheelTorque(double wheelSpeed_radps) const;
+
 private:
     PowertrainResult solveRegen(const PowertrainRequest& req) const;
     bool solveElectric(const PowertrainRequest& req, PowertrainResult& out) const;

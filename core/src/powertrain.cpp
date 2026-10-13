@@ -67,6 +67,25 @@ PowertrainResult Powertrain::resolve(const PowertrainRequest& req) const
     return solveEngine(req);
 }
 
+double Powertrain::maxWheelTorque(double wheelSpeed_radps) const
+{
+    const DrivetrainParams& d = drivetrain_;
+    const EngineParams& e = engine_.params();
+    double engineAxle = 0.0;
+    for (std::size_t i = 0; i < d.gearRatios.size(); ++i) {
+        const double g = d.gearRatios[i] * d.finalDriveRatio;
+        const double wGear = wheelSpeed_radps * g;
+        if (wGear > e.maxSpeed_radps || (wGear < e.idleSpeed_radps && i != 0)) {
+            continue;
+        }
+        const double wEngine = std::max(wGear, e.idleSpeed_radps);
+        engineAxle = std::max(engineAxle, engine_.maxTorque(wEngine) * g * d.gearboxEfficiency);
+    }
+    const double motorAxle = motor_.maxTorque(wheelSpeed_radps * d.motorGearRatio)
+                           * d.motorGearRatio * d.motorGearEfficiency;
+    return engineAxle + motorAxle;
+}
+
 PowertrainResult Powertrain::solveRegen(const PowertrainRequest& req) const
 {
     const DrivetrainParams& d = drivetrain_;
