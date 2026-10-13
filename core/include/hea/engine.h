@@ -23,7 +23,7 @@ struct EngineParams {
         110.0, 130.0, 140.0, 142.0, 138.0, 128.0};
 
     // Willans hattı yakıt modeli (bkz. Engine::fuelPower):
-    double indicatedEfficiency = 0.40;   // e: indike (iç) verim [-]
+    double indicatedEfficiency = 0.44;   // e: indike (iç) verim [-]; tepe efektif verim ~%38
     double frictionTorque0_Nm = 12.0;    // Sürtünme torku sabit kısmı [Nm]
     double frictionTorqueSlope = 0.02;   // Sürtünme torkunun devirle artışı [Nm/(rad/s)]
 

@@ -190,6 +190,12 @@ PowertrainResult Powertrain::solveEngine(const PowertrainRequest& req) const
             pGen = 0.0;
         }
     }
+    // Yakıt kesme (DFCO): tekerleğe tahrik gerekmiyor ve şarj da yapılmıyorsa
+    // enjektörler kapanır, yakıt sıfırdır. Motorun sürüklenme direnci ihmal edilir.
+    if (req.wheelTorque_Nm <= kTorqueEps && tGen == 0.0) {
+        return out;
+    }
+
     // Jeneratörü döndürmek için eksende gereken ek tork: T_eksen = -T_gen * G / eta
     const double axleForCharge = -tGen * d.motorGearRatio / d.motorGearEfficiency;
 

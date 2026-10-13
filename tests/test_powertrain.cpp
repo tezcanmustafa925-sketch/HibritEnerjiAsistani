@@ -84,14 +84,14 @@ static void testEngineFuel()
 {
     // 2000 dev/dak = 209.44 rad/s, T = 100 Nm:
     //   T_sur  = 12 + 0.02*209.44 = 16.1888 Nm
-    //   P_yakit = (100 + 16.1888) * 209.44 / 0.40 = 60836.4 W
-    //   m_dot  = 60836.4 / 43e6 = 1.41480e-3 kg/s (~5.1 kg/h)
-    //   verim  = 100*209.44 / 60836.4 = 0.34427 -> BSFC = 3.6e9/(0.34427*43e6) = 243 g/kWh
+    //   P_yakit = (100 + 16.1888) * 209.44 / 0.44 = 24334.56 / 0.44 = 55305.8 W
+    //   m_dot  = 55305.8 / 43e6 = 1.28618e-3 kg/s (~4.6 kg/h)
+    //   verim  = 100*209.44 / 55305.8 = 0.37869 -> BSFC = 3.6e9/(0.37869*43e6) = 221 g/kWh
     const double w = 209.44;
     HEA_CHECK_NEAR(kEngine.frictionTorque(w), 16.1888, 1e-9);
-    HEA_CHECK_NEAR(kEngine.fuelPower(100.0, w), 60836.4, 0.1);
-    HEA_CHECK_NEAR(kEngine.fuelRate(100.0, w), 1.41480e-3, 1e-8);
-    HEA_CHECK_NEAR(kEngine.efficiency(100.0, w), 0.34427, 1e-5);
+    HEA_CHECK_NEAR(kEngine.fuelPower(100.0, w), 55305.8, 0.1);
+    HEA_CHECK_NEAR(kEngine.fuelRate(100.0, w), 1.28618e-3, 1e-8);
+    HEA_CHECK_NEAR(kEngine.efficiency(100.0, w), 0.37869, 1e-5);
     // Sabit devirde yük arttıkça verim artar (sürtünme payı küçülür)
     HEA_CHECK(kEngine.efficiency(130.0, w) > kEngine.efficiency(100.0, w));
     HEA_CHECK(kEngine.efficiency(20.0, w) < 0.25);
@@ -156,8 +156,8 @@ static void testElectricOverriddenWhenBatteryEmpty()
 static void testEngineCruiseGearChoice()
 {
     // 100 km/h düz yol, F = 378 N -> T_tekerlek = 113.4 Nm, omega_tekerlek = 92.593 rad/s
-    //   5. vites: G = 0.8*3.9 = 3.12 -> 288.9 rad/s (2759 dev/dak), T = 38.26 Nm -> P_yakit 40.5 kW
-    //   4. vites: G = 3.9         -> 361.1 rad/s (3448 dev/dak), T = 30.61 Nm -> P_yakit 45.0 kW
+    //   5. vites: G = 0.8*3.9 = 3.12 -> 288.9 rad/s (2759 dev/dak), T = 38.26 Nm -> P_yakit 36.8 kW
+    //   4. vites: G = 3.9         -> 361.1 rad/s (3448 dev/dak), T = 30.61 Nm -> P_yakit 40.9 kW
     //   En düşük yakıt 5. viteste.
     const double tw = 113.4;
     const PowertrainResult r = kPt.resolve(makeRequest(tw, kWheel100, Mode::Engine));
@@ -169,6 +169,23 @@ static void testEngineCruiseGearChoice()
     // Güç dengesi: motor gücü * vites verimi = tekerlek gücü
     HEA_CHECK_NEAR(r.engineTorque_Nm * r.engineSpeed_radps * 0.95, tw * kWheel100, 1e-6);
     HEA_CHECK_NEAR(r.motorElectricalPower_W, 0.0, 0.0);
+}
+
+static void testEngineFuelCutWhenCoasting()
+{
+    // ICE modunda tekerlekte tork talebi yok (serbest yuvarlanma) -> yakıt kesilir
+    const PowertrainResult r = kPt.resolve(makeRequest(0.0, kWheel100, Mode::Engine));
+    HEA_CHECK(r.mode == Mode::Engine);
+    HEA_CHECK_NEAR(r.fuelRate_kgps, 0.0, 0.0);
+    HEA_CHECK_NEAR(r.engineTorque_Nm, 0.0, 0.0);
+    HEA_CHECK_NEAR(r.unmetWheelTorque_Nm, 0.0, 0.0);
+
+    // Ama şarj isteniyorsa motor çalışır ve yakıt yakar
+    PowertrainRequest req = makeRequest(0.0, kWheel100, Mode::Engine);
+    req.chargePower_W = 5000.0;
+    const PowertrainResult c = kPt.resolve(req);
+    HEA_CHECK(c.fuelRate_kgps > 0.0);
+    HEA_CHECK(c.motorElectricalPower_W < 0.0);
 }
 
 static void testEngineCharging()
@@ -258,6 +275,7 @@ int main()
     testElectricCruise();
     testElectricOverriddenWhenBatteryEmpty();
     testEngineCruiseGearChoice();
+    testEngineFuelCutWhenCoasting();
     testEngineCharging();
     testRegenLimitedByBattery();
     testRegenLightBrakingFullyElectric();

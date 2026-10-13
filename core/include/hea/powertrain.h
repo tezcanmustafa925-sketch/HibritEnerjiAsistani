@@ -75,7 +75,8 @@ struct PowertrainResult {
 //      jeneratör olarak (motor ve batarya şarj sınırına kadar), kalanı sürtünmeli fren
 //   3. Electric istendi ve motor + batarya yetiyor  -> Electric
 //      yetmiyorsa                                   -> Engine (overridden = true)
-//   4. Engine: yakıt debisi en düşük vites seçilir. Motor yetmezse elektrik motoru
+//   4. Engine: tahrik ve şarj gerekmiyorsa yakıt kesilir (DFCO, yakıt = 0).
+//      Aksi halde yakıt debisi en düşük vites seçilir. Motor yetmezse elektrik motoru
 //      takviye eder; o da yetmezse eksik tork unmetWheelTorque_Nm olarak bildirilir.
 class Powertrain {
 public:
