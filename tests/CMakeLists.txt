@@ -10,3 +10,4 @@ endfunction()
 
 hea_add_test(test_smoke)
 hea_add_test(test_types)
+hea_add_test(test_vehicle_model)

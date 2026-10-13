@@ -3,6 +3,7 @@
 add_library(hea_core STATIC
     src/mode.cpp
     src/units.cpp
+    src/vehicle_model.cpp
     src/vehicle_params.cpp
     src/version.cpp
 )
