@@ -16,3 +16,21 @@ hea_add_test(test_powertrain)
 hea_add_test(test_drive_cycle)
 hea_add_test(test_simulation)
 hea_add_test(test_rule_based)
+
+# --- Terminal uygulaması testleri ---
+add_test(NAME cli_yardim COMMAND hea_cli --yardim)
+add_test(NAME cli_ozet COMMAND hea_cli --cevrim sehir_101)
+add_test(NAME cli_adimlar COMMAND hea_cli --cevrim sehir_101 --strateji kural --adimlar --aralik 60)
+# Hatalı kullanım sıfırdan farklı çıkış kodu vermeli
+add_test(NAME cli_bilinmeyen_secenek COMMAND hea_cli --bilinmeyen)
+add_test(NAME cli_bilinmeyen_cevrim COMMAND hea_cli --cevrim yok_boyle_cevrim)
+add_test(NAME cli_bilinmeyen_strateji COMMAND hea_cli --strateji yok)
+set_tests_properties(cli_bilinmeyen_secenek cli_bilinmeyen_cevrim cli_bilinmeyen_strateji
+                     PROPERTIES WILL_FAIL TRUE)
+# CSV: sehir_101 1241 s -> 1241 adım satırı + başlık
+add_test(NAME cli_csv
+         COMMAND ${CMAKE_COMMAND}
+                 -DCLI=$<TARGET_FILE:hea_cli>
+                 -DOUT=${CMAKE_CURRENT_BINARY_DIR}/cli_test.csv
+                 -DEXPECTED_ROWS=1241
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/check_csv.cmake)

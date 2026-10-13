@@ -1,151 +1,211 @@
-#include <algorithm>
+// Akıllı Hibrit Enerji Asistanı — terminal uygulaması.
+// Core'dan gelen StepResult verilerini ekrana / CSV'ye yazar. Hesap yapmaz.
+
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <memory>
+#include <string>
 #include <vector>
 
+#include "csv_export.h"
 #include "hea/drive_cycle.h"
 #include "hea/rule_based_strategy.h"
 #include "hea/simulation.h"
 #include "hea/strategy.h"
-#include "hea/electric_motor.h"
-#include "hea/engine.h"
-#include "hea/units.h"
-#include "hea/vehicle_model.h"
 #include "hea/version.h"
+#include "report.h"
+#include "tables.h"
 
-// Geçici: araç modelinin sabit hızda ürettiği yol yükünü tablo olarak gösterir.
-// Simülasyon döngüsü eklendiğinde (5. adım) yerini adım çıktılarına bırakacak.
-static void printRoadLoadTable(const hea::VehicleModel& model, double gradePercent)
+namespace {
+
+// Çıkış kodları
+constexpr int kExitOk = 0;
+constexpr int kExitFileError = 1;
+constexpr int kExitUsage = 2;
+
+struct Options {
+    std::string cycle = "test";      // çevrim adı ya da egitim / test / hepsi
+    std::string strategy = "hepsi";  // ice / ev / kural / hepsi
+    bool steps = false;              // adım adım çıktı
+    int interval_s = 1;              // adım çıktısında kaç saniyede bir satır
+    std::string csvPath;             // boş değilse CSV yaz
+    bool componentTables = false;
+    bool listCycles = false;
+    bool help = false;
+};
+
+void printUsage()
 {
-    const double theta = hea::units::gradePercentToRad(gradePercent);
-    std::printf("\nSabit hiz yol yuku (egim %%%.0f, yuk 75 kg)\n", gradePercent);
-    std::printf("%8s %9s %9s %9s %9s %10s\n",
-                "km/h", "aero[N]", "yuv[N]", "egim[N]", "top[N]", "guc[kW]");
-    for (int kmh = 0; kmh <= 140; kmh += 20) {
-        const double v = hea::units::kmhToMps(kmh);
-        const hea::RoadLoad load = model.roadLoad(v, 0.0, theta, 75.0);
-        std::printf("%8d %9.1f %9.1f %9.1f %9.1f %10.2f\n", kmh,
-                    load.aero_N, load.rolling_N, load.grade_N, load.total_N,
-                    hea::VehicleModel::wheelPower(load.total_N, v) / 1000.0);
-    }
+    std::printf(
+        "Kullanim: hea_cli [secenekler]\n"
+        "  --cevrim <ad>      Calistirilacak cevrim: bir cevrim adi (or. sehir_101),\n"
+        "                     'egitim', 'test' (varsayilan) veya 'hepsi'\n"
+        "  --strateji <ad>    ice | ev | kural | hepsi (varsayilan)\n"
+        "  --adimlar          Her adimi ekrana yaz\n"
+        "  --aralik <s>       --adimlar ile her <s> saniyede bir satir (varsayilan 1)\n"
+        "  --csv <dosya>      Tum adim sonuclarini CSV dosyasina yaz (SI birimleri)\n"
+        "  --cevrimler        Egitim ve test cevrimlerinin listesini goster\n"
+        "  --tablolar         Bilesen kontrol tablolarini goster\n"
+        "  --yardim           Bu metni goster\n");
 }
 
-// Geçici: içten yanmalı motorun BSFC haritası [g/kWh]. "-" = tam yük sınırının üstü.
-static void printBsfcMap(const hea::Engine& engine)
+// Argümanları okur. Hata varsa mesaj yazıp false döner.
+bool parseArgs(int argc, char** argv, Options& opt)
 {
-    std::printf("\nICE BSFC haritasi [g/kWh] (satir: tork Nm, sutun: dev/dak)\n%6s", "Nm");
-    for (int rpm = 1000; rpm <= 5000; rpm += 1000) {
-        std::printf("%7d", rpm);
-    }
-    std::printf("\n");
-    for (int t = 140; t >= 20; t -= 20) {
-        std::printf("%6d", t);
-        for (int rpm = 1000; rpm <= 5000; rpm += 1000) {
-            const double w = hea::units::rpmToRadps(rpm);
-            if (!engine.canDeliver(t, w)) {
-                std::printf("%7s", "-");
-                continue;
+    for (int i = 1; i < argc; ++i) {
+        const std::string a = argv[i];
+        auto needValue = [&](const char* name) -> const char* {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "Hata: %s bir deger bekliyor.\n", name);
+                return nullptr;
             }
-            // BSFC [g/kWh] = yakit [g/s] / guc [kW] * 3600
-            const double bsfc = engine.fuelRate(t, w) * 1000.0 / (t * w / 1000.0) * 3600.0;
-            std::printf("%7.0f", bsfc);
-        }
-        std::printf("\n");
-    }
-}
-
-// Geçici: elektrik motorunun motor modundaki verimi [%].
-static void printMotorEfficiencyMap(const hea::ElectricMotor& motor)
-{
-    std::printf("\nEM verimi [%%] (satir: tork Nm, sutun: dev/dak)\n%6s", "Nm");
-    for (int rpm = 2000; rpm <= 12000; rpm += 2000) {
-        std::printf("%7d", rpm);
-    }
-    std::printf("\n");
-    for (int t = 160; t >= 20; t -= 20) {
-        std::printf("%6d", t);
-        for (int rpm = 2000; rpm <= 12000; rpm += 2000) {
-            const double w = hea::units::rpmToRadps(rpm);
-            if (!motor.canDeliver(t, w)) {
-                std::printf("%7s", "-");
-                continue;
+            return argv[++i];
+        };
+        if (a == "--cevrim") {
+            const char* v = needValue("--cevrim");
+            if (v == nullptr) return false;
+            opt.cycle = v;
+        } else if (a == "--strateji") {
+            const char* v = needValue("--strateji");
+            if (v == nullptr) return false;
+            opt.strategy = v;
+        } else if (a == "--adimlar") {
+            opt.steps = true;
+        } else if (a == "--aralik") {
+            const char* v = needValue("--aralik");
+            if (v == nullptr) return false;
+            opt.interval_s = std::atoi(v);
+            if (opt.interval_s < 1) {
+                std::fprintf(stderr, "Hata: --aralik en az 1 olmali.\n");
+                return false;
             }
-            std::printf("%7.1f", 100.0 * t * w / motor.electricalPower(t, w));
+        } else if (a == "--csv") {
+            const char* v = needValue("--csv");
+            if (v == nullptr) return false;
+            opt.csvPath = v;
+        } else if (a == "--cevrimler") {
+            opt.listCycles = true;
+        } else if (a == "--tablolar") {
+            opt.componentTables = true;
+        } else if (a == "--yardim" || a == "-h" || a == "--help") {
+            opt.help = true;
+        } else {
+            std::fprintf(stderr, "Hata: bilinmeyen secenek '%s'.\n", a.c_str());
+            return false;
         }
-        std::printf("\n");
     }
+    return true;
 }
 
-// Çevrim kümesinin özet tablosu (hızlar km/h).
-static void printCycleTable(const char* title, const std::vector<hea::DriveCycle>& cycles)
+// Seçilen çevrimleri döndürür; ad bulunamazsa boş liste.
+std::vector<hea::DriveCycle> selectCycles(const std::string& name)
 {
-    using hea::units::mpsToKmh;
-    std::printf("\n%s\n", title);
-    std::printf("%-11s %7s %8s %8s %8s %6s %7s %7s %6s %5s\n", "cevrim", "sure[s]",
-                "yol[km]", "ort km/h", "max km/h", "dur[%]", "egim+[%]", "egim-[%]",
-                "yuk[kg]", "T[C]");
-    for (const hea::DriveCycle& c : cycles) {
-        double gMax = 0.0;
-        double gMin = 0.0;
-        for (const hea::DriveInput& s : c.samples) {
-            gMax = std::max(gMax, std::tan(s.grade_rad) * 100.0);
-            gMin = std::min(gMin, std::tan(s.grade_rad) * 100.0);
-        }
-        const hea::DriveInput& first = c.samples.front();
-        std::printf("%-11s %7.0f %8.2f %8.1f %8.1f %6.1f %7.1f %8.1f %7.0f %5.0f\n",
-                    c.name.c_str(), c.duration_s(), c.distance_m() / 1000.0,
-                    mpsToKmh(c.averageSpeed_mps()), mpsToKmh(c.maxSpeed_mps()),
-                    100.0 * c.stopFraction(), gMax, gMin, first.payload_kg,
-                    first.ambientTemp_C);
+    const std::vector<hea::DriveCycle> train = hea::trainingCycles();
+    const std::vector<hea::DriveCycle> test = hea::testCycles();
+    if (name == "egitim") return train;
+    if (name == "test") return test;
+    std::vector<hea::DriveCycle> all = train;
+    all.insert(all.end(), test.begin(), test.end());
+    if (name == "hepsi") return all;
+    for (const hea::DriveCycle& c : all) {
+        if (c.name == name) return {c};
     }
+    return {};
 }
 
-// Geçici (7. adımda ayrıntılı çıktıyla değişecek): her çevrimi verilen stratejiyle
-// çalıştırıp tek satırlık özet yazar.
-static void printRunTable(const std::vector<hea::DriveCycle>& cycles, hea::Strategy& strategy)
+// Seçilen stratejileri oluşturur; ad bilinmiyorsa boş liste.
+std::vector<std::unique_ptr<hea::Strategy>> selectStrategies(const std::string& name)
 {
-    const hea::SimulationConfig cfg;
-    std::printf("\nStrateji: %s\n", strategy.name());
-    std::printf("%-11s %8s %8s %6s %6s %6s %6s %6s %6s %7s %7s %6s\n", "cevrim", "L/100km",
-                "yakit[L]", "SOC0", "SOC1", "EV[%]", "ICE[%]", "REG[%]", "DUR[%]",
-                "rejen", "surt.fr", "calis.");
-    std::printf("%-11s %8s %8s %6s %6s %6s %6s %6s %6s %7s %7s %6s\n", "", "", "", "", "", "",
-                "", "", "", "[Wh]", "[Wh]", "[adet]");
-    for (const hea::DriveCycle& c : cycles) {
-        const auto steps = hea::runCycle(cfg, c, strategy);
-        const hea::RunSummary s = hea::summarize(steps, cfg.initialSoc);
-        std::printf("%-11s %8.2f %8.3f %6.3f %6.3f %6.1f %6.1f %6.1f %6.1f %7.0f %7.0f %6d\n",
-                    c.name.c_str(), s.fuelPer100km_L, s.fuel_L, s.socStart, s.socEnd,
-                    100.0 * s.timeElectric, 100.0 * s.timeEngine, 100.0 * s.timeRegen,
-                    100.0 * s.timeStopped, s.regenEnergy_J / 3600.0,
-                    s.frictionBrakeEnergy_J / 3600.0, s.engineStarts);
-    }
+    std::vector<std::unique_ptr<hea::Strategy>> out;
+    const bool all = name == "hepsi";
+    if (all || name == "ice") out.push_back(std::make_unique<hea::FixedModeStrategy>(hea::Mode::Engine));
+    if (all || name == "ev") out.push_back(std::make_unique<hea::FixedModeStrategy>(hea::Mode::Electric));
+    if (all || name == "kural") out.push_back(std::make_unique<hea::RuleBasedStrategy>());
+    return out;
 }
+
+} // namespace
 
 int main(int argc, char** argv)
 {
-    // Ekrana yazma işi yalnızca uygulama katmanında yapılır, core'da değil.
-    std::printf("Akilli Hibrit Enerji Asistani (core %s)\n", hea::coreVersion());
-
-    // --tablolar: bileşen modellerinin kontrol tablolarını da göster
-    if (argc > 1 && std::strcmp(argv[1], "--tablolar") == 0) {
-        const hea::VehicleModel model{hea::VehicleParams{}};
-        printRoadLoadTable(model, 0.0);
-        printRoadLoadTable(model, 5.0);
-        printBsfcMap(hea::Engine{hea::EngineParams{}});
-        printMotorEfficiencyMap(hea::ElectricMotor{hea::MotorParams{}});
+    Options opt;
+    if (!parseArgs(argc, argv, opt)) {
+        printUsage();
+        return kExitUsage;
+    }
+    if (opt.help) {
+        printUsage();
+        return kExitOk;
     }
 
-    printCycleTable("EGITIM CEVRIMLERI", hea::trainingCycles());
-    printCycleTable("TEST CEVRIMLERI", hea::testCycles());
+    std::printf("Akilli Hibrit Enerji Asistani (core %s)\n", hea::coreVersion());
 
-    const auto tests = hea::testCycles();
-    hea::FixedModeStrategy iceOnly(hea::Mode::Engine);
-    hea::FixedModeStrategy evFirst(hea::Mode::Electric);
-    hea::RuleBasedStrategy rules;
-    printRunTable(tests, iceOnly);
-    printRunTable(tests, evFirst);
-    printRunTable(tests, rules);
-    return 0;
+    if (opt.componentTables) {
+        cli::printComponentTables();
+    }
+    if (opt.listCycles) {
+        cli::printCycleTable("EGITIM CEVRIMLERI", hea::trainingCycles());
+        cli::printCycleTable("TEST CEVRIMLERI", hea::testCycles());
+    }
+    if (opt.componentTables || opt.listCycles) {
+        // Yalnızca tablo istendiyse simülasyon çalıştırma (seçenek de verilmediyse)
+        bool onlyTables = true;
+        for (int i = 1; i < argc; ++i) {
+            const std::string a = argv[i];
+            if (a != "--tablolar" && a != "--cevrimler") onlyTables = false;
+        }
+        if (onlyTables) return kExitOk;
+    }
+
+    const std::vector<hea::DriveCycle> cycles = selectCycles(opt.cycle);
+    if (cycles.empty()) {
+        std::fprintf(stderr, "Hata: '%s' adinda cevrim yok. Liste icin --cevrimler.\n",
+                     opt.cycle.c_str());
+        return kExitUsage;
+    }
+    std::vector<std::unique_ptr<hea::Strategy>> strategies = selectStrategies(opt.strategy);
+    if (strategies.empty()) {
+        std::fprintf(stderr, "Hata: '%s' adinda strateji yok (ice | ev | kural | hepsi).\n",
+                     opt.strategy.c_str());
+        return kExitUsage;
+    }
+
+    const hea::SimulationConfig cfg;
+    std::vector<cli::RunRecord> runs;
+    for (const hea::DriveCycle& c : cycles) {
+        for (const auto& strategy : strategies) {
+            cli::RunRecord run;
+            run.cycle = c.name;
+            run.strategy = strategy->name();
+            run.steps = hea::runCycle(cfg, c, *strategy);
+            run.summary = hea::summarize(run.steps, cfg.initialSoc);
+
+            if (opt.steps) {
+                std::printf("\n=== %s / %s ===\n", run.cycle.c_str(), run.strategy.c_str());
+                cli::printStepHeader();
+                for (const hea::StepResult& r : run.steps) {
+                    const long t = std::lround(r.time_s);
+                    if (t % opt.interval_s == 0) {
+                        cli::printStep(r);
+                    }
+                }
+            }
+            runs.push_back(std::move(run));
+        }
+    }
+
+    cli::printSummaryTable(runs);
+
+    if (!opt.csvPath.empty()) {
+        if (!cli::writeStepsCsv(opt.csvPath, runs)) {
+            std::fprintf(stderr, "Hata: '%s' dosyasina yazilamadi.\n", opt.csvPath.c_str());
+            return kExitFileError;
+        }
+        std::size_t rows = 0;
+        for (const cli::RunRecord& r : runs) rows += r.steps.size();
+        std::printf("\nCSV yazildi: %s (%zu satir)\n", opt.csvPath.c_str(), rows);
+    }
+    return kExitOk;
 }
