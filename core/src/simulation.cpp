@@ -96,6 +96,13 @@ StepResult Simulation::step()
     // --- 6) Batarya ve yakıt ---
     const BatteryStep bs = battery_.step(pt.motorElectricalPower_W + aux, dt, in.ambientTemp_C);
     fuelUsed_ += pt.fuelRate_kgps * dt;
+    // Motor çalıştırma cezası
+    const bool engineRunning = pt.fuelRate_kgps > 0.0;
+    out.engineStarted = engineRunning && !engineRunning_;
+    if (out.engineStarted) {
+        fuelUsed_ += config_.engineStartFuel_kg;
+    }
+    engineRunning_ = engineRunning;
     batteryEnergy_ += bs.power_W * dt;
 
     // --- 7) Sürücü pedalları (talepten türetilen göstergeler) ---
@@ -189,6 +196,9 @@ RunSummary summarize(const std::vector<StepResult>& steps, double initialSoc)
             s.regenEnergy_J += -r.motorElectricalPower_W * r.dt_s;
         }
         s.frictionBrakeEnergy_J += r.frictionBrakePower_W * r.dt_s;
+        if (r.engineStarted) {
+            ++s.engineStarts;
+        }
         s.maxSpeedError_mps = std::max(s.maxSpeedError_mps,
                                        std::fabs(r.targetSpeed_mps - r.speed_mps));
     }

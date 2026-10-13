@@ -7,6 +7,7 @@ add_library(hea_core STATIC
     src/engine.cpp
     src/mode.cpp
     src/powertrain.cpp
+    src/rule_based_strategy.cpp
     src/simulation.cpp
     src/strategy.cpp
     src/units.cpp

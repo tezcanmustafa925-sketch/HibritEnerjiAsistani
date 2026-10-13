@@ -26,6 +26,11 @@ struct SimulationConfig {
     // Fren pedalını normalize etmek için lastik-yol sürtünme katsayısı mu [-]:
     // en büyük fren kuvveti = mu * m * g
     double tireRoadFriction = 0.9;
+    // Motorun her çalıştırılmasında harcanan ek yakıt [kg]. Marş sırasında
+    // devri yükseltmek, yanmayı kararlı hale getirmek ve katalizörü sıcak tutmak
+    // için harcanan yakıtı temsil eder. 0.2 g, rölantide ~2-3 saniyelik yakıta
+    // denk, benim seçtiğim bir değerdir. Sık açıp kapatan stratejileri cezalandırır.
+    double engineStartFuel_kg = 0.2e-3;
 };
 
 // Bir çevrimi adım adım çalıştıran simülasyon.
@@ -53,6 +58,10 @@ struct SimulationConfig {
 //   - Yardımcı yük her zaman bataryadan çekilir; batarya sınırları stratejiye
 //     ve güç aktarma organına bu yük düşülerek verilir.
 //   - Adım içinde eğim, yük ve ortam sıcaklığı sabittir (adım sonundaki örnek).
+//   - Motor çalıştırma: önceki adımda yakıt yakılmıyorken bu adımda yakılıyorsa
+//     bir çalıştırma sayılır ve engineStartFuel_kg eklenir. Yakıt kesmeden (DFCO)
+//     sonra yeniden yakıt vermek de çalıştırma sayılır; bu, temkinli (cezayı
+//     biraz büyüten) bir basitleştirmedir.
 class Simulation {
 public:
     // cycle ve strategy simülasyon boyunca yaşamalıdır (referans tutulur).
@@ -74,6 +83,7 @@ private:
     Battery battery_;
 
     std::size_t next_ = 1;   // İşlenecek sonraki örnek
+    bool engineRunning_ = false; // Önceki adımda motor yakıt yakıyor muydu?
     double speed_ = 0.0;     // Gerçekleşen hız [m/s]
     double distance_ = 0.0;
     double fuelUsed_ = 0.0;
@@ -102,6 +112,7 @@ struct RunSummary {
     double timeRegen = 0.0;
     double timeStopped = 0.0;
     double overriddenFraction = 0.0;   // Stratejinin önerisinin uygulanamadığı adım oranı
+    int engineStarts = 0;              // Motor çalıştırma sayısı
     double maxSpeedError_mps = 0.0;    // max |v_hedef - v| (izleme hatası)
 };
 

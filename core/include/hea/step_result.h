@@ -42,6 +42,7 @@ struct StepResult {
     Mode mode = Mode::Stopped;      // Bu adımda gerçekte uygulanan mod
     bool modeOverridden = false;    // Öneri uygulanamadı mı? (ör. EV gücü yetmedi)
     int gear = 0;                   // Vites (ICE kapalıysa 0)
+    bool engineStarted = false;     // Motor bu adımda çalıştırıldı mı?
     double engineSpeed_radps = 0.0; // İçten yanmalı motor devri [rad/s]
     double engineTorque_Nm = 0.0;   // İçten yanmalı motor torku [Nm]
     double motorSpeed_radps = 0.0;  // Elektrik motoru devri [rad/s]

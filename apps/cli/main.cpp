@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "hea/drive_cycle.h"
+#include "hea/rule_based_strategy.h"
 #include "hea/simulation.h"
 #include "hea/strategy.h"
 #include "hea/electric_motor.h"
@@ -106,19 +107,19 @@ static void printRunTable(const std::vector<hea::DriveCycle>& cycles, hea::Strat
 {
     const hea::SimulationConfig cfg;
     std::printf("\nStrateji: %s\n", strategy.name());
-    std::printf("%-11s %8s %8s %6s %6s %6s %6s %6s %6s %7s %7s\n", "cevrim", "L/100km",
+    std::printf("%-11s %8s %8s %6s %6s %6s %6s %6s %6s %7s %7s %6s\n", "cevrim", "L/100km",
                 "yakit[L]", "SOC0", "SOC1", "EV[%]", "ICE[%]", "REG[%]", "DUR[%]",
-                "rejen", "surt.fr");
-    std::printf("%-11s %8s %8s %6s %6s %6s %6s %6s %6s %7s %7s\n", "", "", "", "", "", "",
-                "", "", "", "[Wh]", "[Wh]");
+                "rejen", "surt.fr", "calis.");
+    std::printf("%-11s %8s %8s %6s %6s %6s %6s %6s %6s %7s %7s %6s\n", "", "", "", "", "", "",
+                "", "", "", "[Wh]", "[Wh]", "[adet]");
     for (const hea::DriveCycle& c : cycles) {
         const auto steps = hea::runCycle(cfg, c, strategy);
         const hea::RunSummary s = hea::summarize(steps, cfg.initialSoc);
-        std::printf("%-11s %8.2f %8.3f %6.3f %6.3f %6.1f %6.1f %6.1f %6.1f %7.0f %7.0f\n",
+        std::printf("%-11s %8.2f %8.3f %6.3f %6.3f %6.1f %6.1f %6.1f %6.1f %7.0f %7.0f %6d\n",
                     c.name.c_str(), s.fuelPer100km_L, s.fuel_L, s.socStart, s.socEnd,
                     100.0 * s.timeElectric, 100.0 * s.timeEngine, 100.0 * s.timeRegen,
                     100.0 * s.timeStopped, s.regenEnergy_J / 3600.0,
-                    s.frictionBrakeEnergy_J / 3600.0);
+                    s.frictionBrakeEnergy_J / 3600.0, s.engineStarts);
     }
 }
 
@@ -142,7 +143,9 @@ int main(int argc, char** argv)
     const auto tests = hea::testCycles();
     hea::FixedModeStrategy iceOnly(hea::Mode::Engine);
     hea::FixedModeStrategy evFirst(hea::Mode::Electric);
+    hea::RuleBasedStrategy rules;
     printRunTable(tests, iceOnly);
     printRunTable(tests, evFirst);
+    printRunTable(tests, rules);
     return 0;
 }
