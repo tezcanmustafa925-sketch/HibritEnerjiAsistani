@@ -1,6 +1,7 @@
 # Çekirdek kütüphane: araç modeli, stratejiler, tahmin modeli, simülasyon.
 # Kural: bu kütüphane stdout/stderr'e hiçbir şey yazmaz.
 add_library(hea_core STATIC
+    src/battery.cpp
     src/mode.cpp
     src/units.cpp
     src/vehicle_model.cpp
