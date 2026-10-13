@@ -2,7 +2,10 @@
 # Kural: bu kütüphane stdout/stderr'e hiçbir şey yazmaz.
 add_library(hea_core STATIC
     src/battery.cpp
+    src/electric_motor.cpp
+    src/engine.cpp
     src/mode.cpp
+    src/powertrain.cpp
     src/units.cpp
     src/vehicle_model.cpp
     src/vehicle_params.cpp

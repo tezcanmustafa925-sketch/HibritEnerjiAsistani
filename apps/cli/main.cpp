@@ -1,5 +1,7 @@
 #include <cstdio>
 
+#include "hea/electric_motor.h"
+#include "hea/engine.h"
 #include "hea/units.h"
 #include "hea/vehicle_model.h"
 #include "hea/version.h"
@@ -21,6 +23,52 @@ static void printRoadLoadTable(const hea::VehicleModel& model, double gradePerce
     }
 }
 
+// Geçici: içten yanmalı motorun BSFC haritası [g/kWh]. "-" = tam yük sınırının üstü.
+static void printBsfcMap(const hea::Engine& engine)
+{
+    std::printf("\nICE BSFC haritasi [g/kWh] (satir: tork Nm, sutun: dev/dak)\n%6s", "Nm");
+    for (int rpm = 1000; rpm <= 5000; rpm += 1000) {
+        std::printf("%7d", rpm);
+    }
+    std::printf("\n");
+    for (int t = 140; t >= 20; t -= 20) {
+        std::printf("%6d", t);
+        for (int rpm = 1000; rpm <= 5000; rpm += 1000) {
+            const double w = hea::units::rpmToRadps(rpm);
+            if (!engine.canDeliver(t, w)) {
+                std::printf("%7s", "-");
+                continue;
+            }
+            // BSFC [g/kWh] = yakit [g/s] / guc [kW] * 3600
+            const double bsfc = engine.fuelRate(t, w) * 1000.0 / (t * w / 1000.0) * 3600.0;
+            std::printf("%7.0f", bsfc);
+        }
+        std::printf("\n");
+    }
+}
+
+// Geçici: elektrik motorunun motor modundaki verimi [%].
+static void printMotorEfficiencyMap(const hea::ElectricMotor& motor)
+{
+    std::printf("\nEM verimi [%%] (satir: tork Nm, sutun: dev/dak)\n%6s", "Nm");
+    for (int rpm = 2000; rpm <= 12000; rpm += 2000) {
+        std::printf("%7d", rpm);
+    }
+    std::printf("\n");
+    for (int t = 160; t >= 20; t -= 20) {
+        std::printf("%6d", t);
+        for (int rpm = 2000; rpm <= 12000; rpm += 2000) {
+            const double w = hea::units::rpmToRadps(rpm);
+            if (!motor.canDeliver(t, w)) {
+                std::printf("%7s", "-");
+                continue;
+            }
+            std::printf("%7.1f", 100.0 * t * w / motor.electricalPower(t, w));
+        }
+        std::printf("\n");
+    }
+}
+
 int main()
 {
     // Ekrana yazma işi yalnızca uygulama katmanında yapılır, core'da değil.
@@ -29,5 +77,7 @@ int main()
     const hea::VehicleModel model{hea::VehicleParams{}};
     printRoadLoadTable(model, 0.0);
     printRoadLoadTable(model, 5.0);
+    printBsfcMap(hea::Engine{hea::EngineParams{}});
+    printMotorEfficiencyMap(hea::ElectricMotor{hea::MotorParams{}});
     return 0;
 }
