@@ -37,3 +37,17 @@ add_test(NAME cli_csv
                  -DOUT=${CMAKE_CURRENT_BINARY_DIR}/cli_test.csv
                  -DEXPECTED_ROWS=1241
                  -P ${CMAKE_CURRENT_SOURCE_DIR}/check_csv.cmake)
+
+# --- Python model eğitimi (Python ve paketleri bulunursa) ---
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME py_model_egitimi
+             COMMAND ${CMAKE_COMMAND}
+                     -DCLI=$<TARGET_FILE:hea_cli>
+                     -DPYTHON=${Python3_EXECUTABLE}
+                     -DSCRIPT=${PROJECT_SOURCE_DIR}/model/egit.py
+                     -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/model_test
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/check_model.cmake)
+else()
+    message(STATUS "Python bulunamadi: py_model_egitimi testi atlandi")
+endif()
