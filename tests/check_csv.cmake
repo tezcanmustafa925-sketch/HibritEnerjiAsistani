@@ -3,7 +3,7 @@
 
 file(REMOVE "${OUT}")
 execute_process(
-    COMMAND "${CLI}" --cevrim sehir_101 --strateji kural --csv "${OUT}"
+    COMMAND "${CLI}" --cevrim sehir_101 --strateji kural --hizli --csv "${OUT}"
     RESULT_VARIABLE rc
     OUTPUT_QUIET)
 if(NOT rc EQUAL 0)

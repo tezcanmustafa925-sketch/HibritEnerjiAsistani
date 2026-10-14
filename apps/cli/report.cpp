@@ -38,7 +38,7 @@ void printStep(const hea::StepResult& r)
 
 void printSummaryTable(const std::vector<RunRecord>& runs)
 {
-    std::printf("\nOZET (SOC duzeltmesi yok; SOC farki 10. adimda esdeger yakita cevrilecek)\n");
+    std::printf("\nOZET (ham degerler, SOC farki duzeltilmemis; adil karsilastirma icin: --karsilastir)\n");
     std::printf("%-11s %-13s %7s %8s %7s %6s %6s %7s %5s %5s %5s %5s %6s %6s %6s\n",
                 "cevrim", "strateji", "yol", "L/100km", "yakit", "SOC0", "SOC1", "dSOC",
                 "EV", "ICE", "REG", "DUR", "calis.", "rejen", "uyg.yok");

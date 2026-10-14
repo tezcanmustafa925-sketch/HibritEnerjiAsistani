@@ -1,13 +1,25 @@
 // Akıllı Hibrit Enerji Asistanı — terminal uygulaması.
 // Core'dan gelen StepResult verilerini ekrana / CSV'ye yazar. Hesap yapmaz.
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
+
+#ifdef _WIN32
+#include <io.h>
+#define HEA_ISATTY _isatty
+#define HEA_FILENO _fileno
+#else
+#include <unistd.h>
+#define HEA_ISATTY isatty
+#define HEA_FILENO fileno
+#endif
 
 #include "csv_export.h"
 #include "hea/drive_cycle.h"
@@ -28,9 +40,13 @@ constexpr int kExitFileError = 1;
 constexpr int kExitUsage = 2;
 
 struct Options {
-    std::string cycle = "test";      // çevrim adı ya da egitim / test / hepsi
-    std::string strategy = "hepsi";  // ice / ev / kural / hepsi
-    bool steps = false;              // adım adım çıktı
+    // Varsayılan: tek çevrim + tek strateji, canlı akış
+    std::string cycle = "sehir_101"; // çevrim adı ya da egitim / test / hepsi
+    std::string strategy = "model";  // ice / ev / kural / model / hepsi
+    bool steps = false;              // adım çıktısını zorla (çoklu koşuda da)
+    bool summaryOnly = false;        // adım çıktısı yok, yalnızca özet
+    double speed = 10.0;             // canlı akış hızı: simülasyon saniyesi / gerçek saniye
+    bool fast = false;               // canlı akışta bekleme yapma
     int interval_s = 1;              // adım çıktısında kaç saniyede bir satır
     std::string csvPath;             // boş değilse CSV yaz
     std::string trainingPath;        // boş değilse eğitim verisi CSV'si yaz ve çık
@@ -45,11 +61,16 @@ void printUsage()
 {
     std::printf(
         "Kullanim: hea_cli [secenekler]\n"
-        "  --cevrim <ad>      Calistirilacak cevrim: bir cevrim adi (or. sehir_101),\n"
-        "                     'egitim', 'test' (varsayilan) veya 'hepsi'\n"
-        "  --strateji <ad>    ice | ev | kural | model | hepsi (varsayilan)\n"
-        "  --adimlar          Her adimi ekrana yaz\n"
-        "  --aralik <s>       --adimlar ile her <s> saniyede bir satir (varsayilan 1)\n"
+        "Varsayilan: sehir_101 cevrimi model tabanli stratejiyle canli akar\n"
+        "(10 kat hizli), sonunda ozet tablo gosterilir.\n\n"
+        "  --cevrim <ad>      Calistirilacak cevrim: bir cevrim adi (varsayilan sehir_101),\n"
+        "                     'egitim', 'test' veya 'hepsi'\n"
+        "  --strateji <ad>    ice | ev | kural | model (varsayilan) | hepsi\n"
+        "  --hiz <kat>        Canli akis hizi, simulasyon sn / gercek sn (varsayilan 10)\n"
+        "  --hizli            Beklemeden yaz (canli akis yok)\n"
+        "  --ozet             Adimlari yazma, yalnizca ozet tablo\n"
+        "  --adimlar          Birden cok kosuda da adimlari yaz (normalde yalnizca ozet)\n"
+        "  --aralik <s>       Her <s> saniyede bir adim satiri (varsayilan 1)\n"
         "  --csv <dosya>      Tum adim sonuclarini CSV dosyasina yaz (SI birimleri)\n"
         "  --egitim-verisi <dosya>\n"
         "                     Secilen cevrimler icin tuketim modeli egitim verisini\n"
@@ -83,6 +104,18 @@ bool parseArgs(int argc, char** argv, Options& opt)
             opt.strategy = v;
         } else if (a == "--adimlar") {
             opt.steps = true;
+        } else if (a == "--ozet") {
+            opt.summaryOnly = true;
+        } else if (a == "--hizli") {
+            opt.fast = true;
+        } else if (a == "--hiz") {
+            const char* v = needValue("--hiz");
+            if (v == nullptr) return false;
+            opt.speed = std::atof(v);
+            if (!(opt.speed > 0.0)) {
+                std::fprintf(stderr, "Hata: --hiz pozitif olmali.\n");
+                return false;
+            }
         } else if (a == "--aralik") {
             const char* v = needValue("--aralik");
             if (v == nullptr) return false;
@@ -235,25 +268,57 @@ int main(int argc, char** argv)
         return kExitOk;
     }
 
+    // Adımlar yazılsın mı? Tek koşuda varsayılan olarak evet (canlı akış);
+    // birden çok koşuda yalnızca --adimlar ile (yoksa çıktı on binlerce satır olur).
+    const bool singleRun = cycles.size() * strategies.size() == 1;
+    const bool printSteps = !opt.summaryOnly && (singleRun || opt.steps);
+    // Çıktı bir dosyaya/boruya gidiyorsa beklemenin anlamı yok (ör. CTest, > dosya)
+    const bool toTerminal = HEA_ISATTY(HEA_FILENO(stdout)) != 0;
+    const bool live = printSteps && !opt.fast && toTerminal;
+    if (live) {
+        std::printf("Canli akis: %.0f kat hizli (beklemesiz: --hizli, yalnizca ozet: --ozet)\n",
+                    opt.speed);
+    }
+    constexpr int kHeaderEvery = 30; // okunabilirlik için başlık tekrarı (satır)
+
     std::vector<cli::RunRecord> runs;
     for (const hea::DriveCycle& c : cycles) {
         for (const auto& strategy : strategies) {
             cli::RunRecord run;
             run.cycle = c.name;
             run.strategy = strategy->name();
-            run.steps = hea::runCycle(cfg, c, *strategy);
-            run.summary = hea::summarize(run.steps, cfg.initialSoc);
-
-            if (opt.steps) {
+            if (printSteps) {
                 std::printf("\n=== %s / %s ===\n", run.cycle.c_str(), run.strategy.c_str());
-                cli::printStepHeader();
-                for (const hea::StepResult& r : run.steps) {
-                    const long t = std::lround(r.time_s);
-                    if (t % opt.interval_s == 0) {
-                        cli::printStep(r);
-                    }
+            }
+            // Simülasyon adım adım ilerletilir; her StepResult üretildiği anda yazılır
+            hea::Simulation sim(cfg, c, *strategy);
+            int printed = 0;
+            // Canlı akış saati: her satır, çevrim başından beri geçmesi gereken mutlak
+            // zamana kadar bekler (sleep_until). Tek tek bekleme (sleep_for) kullanılsaydı
+            // Windows zamanlayıcısının ~15.6 ms çözünürlüğü yüzünden gecikmeler birikirdi.
+            const auto liveStart = std::chrono::steady_clock::now();
+            const double cycleStart_s = c.samples.empty() ? 0.0 : c.samples.front().time_s;
+            while (!sim.finished()) {
+                const hea::StepResult r = sim.step();
+                run.steps.push_back(r);
+                if (!printSteps || std::lround(r.time_s) % opt.interval_s != 0) {
+                    continue;
+                }
+                if (printed % kHeaderEvery == 0) {
+                    cli::printStepHeader();
+                }
+                cli::printStep(r);
+                ++printed;
+                if (live) {
+                    std::fflush(stdout);
+                    // Hedef: (simülasyon zamanı / hız) kadar gerçek zaman geçmiş olsun
+                    const double target_s = (r.time_s - cycleStart_s) / opt.speed;
+                    std::this_thread::sleep_until(
+                        liveStart + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                                        std::chrono::duration<double>(target_s)));
                 }
             }
+            run.summary = hea::summarize(run.steps, cfg.initialSoc);
             runs.push_back(std::move(run));
         }
     }

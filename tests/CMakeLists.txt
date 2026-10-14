@@ -22,15 +22,19 @@ hea_add_test(test_comparison)
 
 # --- Terminal uygulaması testleri ---
 add_test(NAME cli_yardim COMMAND hea_cli --yardim)
-add_test(NAME cli_ozet COMMAND hea_cli --cevrim sehir_101)
+add_test(NAME cli_varsayilan COMMAND hea_cli --hizli)
+add_test(NAME cli_ozet COMMAND hea_cli --cevrim test --strateji hepsi)
+add_test(NAME cli_tek_kosu_ozet COMMAND hea_cli --cevrim sehir_101 --ozet)
 add_test(NAME cli_egitim_verisi
          COMMAND hea_cli --cevrim sehir_1 --egitim-verisi ${CMAKE_CURRENT_BINARY_DIR}/egitim_test.csv)
-add_test(NAME cli_adimlar COMMAND hea_cli --cevrim sehir_101 --strateji kural --adimlar --aralik 60)
+add_test(NAME cli_adimlar COMMAND hea_cli --cevrim sehir_101 --strateji kural --hizli --aralik 60)
+add_test(NAME cli_bilinmeyen_hiz COMMAND hea_cli --hiz 0)
 # Hatalı kullanım sıfırdan farklı çıkış kodu vermeli
 add_test(NAME cli_bilinmeyen_secenek COMMAND hea_cli --bilinmeyen)
 add_test(NAME cli_bilinmeyen_cevrim COMMAND hea_cli --cevrim yok_boyle_cevrim)
 add_test(NAME cli_bilinmeyen_strateji COMMAND hea_cli --strateji yok)
 set_tests_properties(cli_bilinmeyen_secenek cli_bilinmeyen_cevrim cli_bilinmeyen_strateji
+                     cli_bilinmeyen_hiz
                      PROPERTIES WILL_FAIL TRUE)
 # CSV: sehir_101 1241 s -> 1241 adım satırı + başlık
 add_test(NAME cli_karsilastir COMMAND hea_cli --cevrim sehir_101 --karsilastir)
