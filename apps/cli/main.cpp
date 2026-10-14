@@ -14,6 +14,7 @@
 #include "hea/rule_based_strategy.h"
 #include "hea/simulation.h"
 #include "hea/strategy.h"
+#include "hea/training_data.h"
 #include "hea/version.h"
 #include "report.h"
 #include "tables.h"
@@ -31,6 +32,7 @@ struct Options {
     bool steps = false;              // adım adım çıktı
     int interval_s = 1;              // adım çıktısında kaç saniyede bir satır
     std::string csvPath;             // boş değilse CSV yaz
+    std::string trainingPath;        // boş değilse eğitim verisi CSV'si yaz ve çık
     bool componentTables = false;
     bool listCycles = false;
     bool help = false;
@@ -46,6 +48,9 @@ void printUsage()
         "  --adimlar          Her adimi ekrana yaz\n"
         "  --aralik <s>       --adimlar ile her <s> saniyede bir satir (varsayilan 1)\n"
         "  --csv <dosya>      Tum adim sonuclarini CSV dosyasina yaz (SI birimleri)\n"
+        "  --egitim-verisi <dosya>\n"
+        "                     Secilen cevrimler icin tuketim modeli egitim verisini\n"
+        "                     yaz (kural tabanli surusle, iki modun maliyeti) ve cik\n"
         "  --cevrimler        Egitim ve test cevrimlerinin listesini goster\n"
         "  --tablolar         Bilesen kontrol tablolarini goster\n"
         "  --yardim           Bu metni goster\n");
@@ -85,6 +90,10 @@ bool parseArgs(int argc, char** argv, Options& opt)
             const char* v = needValue("--csv");
             if (v == nullptr) return false;
             opt.csvPath = v;
+        } else if (a == "--egitim-verisi") {
+            const char* v = needValue("--egitim-verisi");
+            if (v == nullptr) return false;
+            opt.trainingPath = v;
         } else if (a == "--cevrimler") {
             opt.listCycles = true;
         } else if (a == "--tablolar") {
@@ -165,6 +174,25 @@ int main(int argc, char** argv)
                      opt.cycle.c_str());
         return kExitUsage;
     }
+    // Eğitim verisi: durumlar kural tabanlı sürüşle oluşur, her tahrik anında
+    // iki modun maliyeti ayrıca hesaplanır (bkz. hea::buildTrainingSamples).
+    if (!opt.trainingPath.empty()) {
+        std::vector<hea::TrainingSample> samples;
+        for (const hea::DriveCycle& c : cycles) {
+            hea::RuleBasedStrategy driver;
+            const auto part = hea::buildTrainingSamples(hea::SimulationConfig{}, c, driver);
+            samples.insert(samples.end(), part.begin(), part.end());
+            std::printf("%-11s %5zu ornek\n", c.name.c_str(), part.size());
+        }
+        if (!cli::writeTrainingCsv(opt.trainingPath, samples)) {
+            std::fprintf(stderr, "Hata: '%s' dosyasina yazilamadi.\n", opt.trainingPath.c_str());
+            return kExitFileError;
+        }
+        std::printf("Egitim verisi yazildi: %s (%zu ornek)\n", opt.trainingPath.c_str(),
+                    samples.size());
+        return kExitOk;
+    }
+
     std::vector<std::unique_ptr<hea::Strategy>> strategies = selectStrategies(opt.strategy);
     if (strategies.empty()) {
         std::fprintf(stderr, "Hata: '%s' adinda strateji yok (ice | ev | kural | hepsi).\n",

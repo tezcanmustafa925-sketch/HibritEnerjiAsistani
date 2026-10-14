@@ -45,4 +45,33 @@ bool writeStepsCsv(const std::string& path, const std::vector<RunRecord>& runs)
     return std::fclose(f) == 0 && ok;
 }
 
+bool writeTrainingCsv(const std::string& path, const std::vector<hea::TrainingSample>& samples)
+{
+    std::FILE* f = std::fopen(path.c_str(), "w");
+    if (f == nullptr) {
+        return false;
+    }
+    std::fprintf(f,
+                 "cycle,time_s,speed_mps,acceleration_mps2,grade_rad,payload_kg,"
+                 "wheel_torque_Nm,wheel_speed_radps,wheel_power_W,soc,battery_temp_C,"
+                 "battery_max_discharge_W,battery_max_charge_W,"
+                 "ev_feasible,ev_battery_power_W,"
+                 "ice_feasible,ice_fuel_rate_kgps,ice_gear,"
+                 "ice_charge_power_W,ice_charge_fuel_rate_kgps\n");
+    for (const hea::TrainingSample& s : samples) {
+        const hea::StrategyInput& in = s.in;
+        std::fprintf(f,
+                     "%s,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,"
+                     "%d,%.9g,%d,%.9g,%d,%.9g,%.9g\n",
+                     s.cycle.c_str(), in.time_s, in.speed_mps, in.acceleration_mps2,
+                     in.grade_rad, in.payload_kg, in.wheelTorque_Nm, in.wheelSpeed_radps,
+                     in.wheelPower_W, in.soc, in.batteryTemp_C, in.batteryMaxDischarge_W,
+                     in.batteryMaxCharge_W, s.evFeasible ? 1 : 0, s.evBatteryPower_W,
+                     s.iceFeasible ? 1 : 0, s.iceFuelRate_kgps, s.iceGear,
+                     s.iceChargePower_W, s.iceChargeFuelRate_kgps);
+    }
+    const bool ok = std::ferror(f) == 0;
+    return std::fclose(f) == 0 && ok;
+}
+
 } // namespace cli

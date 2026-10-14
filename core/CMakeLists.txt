@@ -10,6 +10,7 @@ add_library(hea_core STATIC
     src/rule_based_strategy.cpp
     src/simulation.cpp
     src/strategy.cpp
+    src/training_data.cpp
     src/units.cpp
     src/vehicle_model.cpp
     src/vehicle_params.cpp

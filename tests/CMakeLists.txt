@@ -16,10 +16,13 @@ hea_add_test(test_powertrain)
 hea_add_test(test_drive_cycle)
 hea_add_test(test_simulation)
 hea_add_test(test_rule_based)
+hea_add_test(test_training_data)
 
 # --- Terminal uygulaması testleri ---
 add_test(NAME cli_yardim COMMAND hea_cli --yardim)
 add_test(NAME cli_ozet COMMAND hea_cli --cevrim sehir_101)
+add_test(NAME cli_egitim_verisi
+         COMMAND hea_cli --cevrim sehir_1 --egitim-verisi ${CMAKE_CURRENT_BINARY_DIR}/egitim_test.csv)
 add_test(NAME cli_adimlar COMMAND hea_cli --cevrim sehir_101 --strateji kural --adimlar --aralik 60)
 # Hatalı kullanım sıfırdan farklı çıkış kodu vermeli
 add_test(NAME cli_bilinmeyen_secenek COMMAND hea_cli --bilinmeyen)
