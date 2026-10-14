@@ -13,8 +13,8 @@ Girdi : hea_cli --egitim-verisi ile üretilen CSV dosyaları (eğitim ve test).
 
 2) ICE yakıt debisi [kg/s] — ICE seçilseydi (şarjsız) yakıt debisi.
    Fizik: P_yakit = (P/eta + a*w_e + b*w_e^2) / e. Motor devri w_e seçilen vitese
-   bağlı olduğu için ilişki doğrusal değildir; [P, w, w^2, T, T^2, T*w] ile
-   ikinci dereceden bir yaklaşım kullanılır.
+   bağlı olduğu için ilişki doğrusal değildir; [P, w, w^2, T, T^2] ile ikinci
+   dereceden bir yaklaşım kullanılır (T*w yok, çünkü P = T*w).
 
 3) Şarjın marjinal yakıt maliyeti [kg/J] — ICE modunda bataryaya verilen her
    joule için harcanan ek yakıt: (yakit_sarjli - yakit) / P_sarj.
@@ -65,7 +65,9 @@ MODELLER = {
     },
     "ice_yakit_debisi_kgps": {
         "aciklama": "ICE secilseydi (sarjsiz) yakit debisi [kg/s]",
-        "ozellikler": ["P", "w", "w^2", "T", "T^2", "T*w"],
+        # T*w eklenmez: tanım gereği P = T*w, aynı özellik iki kez olurdu
+        # (tam doğrusal bağımlılık -> katsayılar keyfi bölüşülür).
+        "ozellikler": ["P", "w", "w^2", "T", "T^2"],
         "hedef": lambda d: d["ice_fuel_rate_kgps"],
         "filtre": lambda d: d["ice_feasible"] == 1,
     },

@@ -17,6 +17,7 @@ hea_add_test(test_drive_cycle)
 hea_add_test(test_simulation)
 hea_add_test(test_rule_based)
 hea_add_test(test_training_data)
+hea_add_test(test_model_based)
 
 # --- Terminal uygulaması testleri ---
 add_test(NAME cli_yardim COMMAND hea_cli --yardim)
@@ -48,6 +49,9 @@ if(Python3_Interpreter_FOUND)
                      -DSCRIPT=${PROJECT_SOURCE_DIR}/model/egit.py
                      -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/model_test
                      -P ${CMAKE_CURRENT_SOURCE_DIR}/check_model.cmake)
+    # Uretilmis C++ katsayi dosyasi JSON ile guncel mi?
+    add_test(NAME py_katsayilar_guncel
+             COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/model/cpp_aktar.py --kontrol)
 else()
     message(STATUS "Python bulunamadi: py_model_egitimi testi atlandi")
 endif()

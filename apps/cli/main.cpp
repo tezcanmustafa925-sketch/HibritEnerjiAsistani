@@ -11,6 +11,7 @@
 
 #include "csv_export.h"
 #include "hea/drive_cycle.h"
+#include "hea/model_based_strategy.h"
 #include "hea/rule_based_strategy.h"
 #include "hea/simulation.h"
 #include "hea/strategy.h"
@@ -44,7 +45,7 @@ void printUsage()
         "Kullanim: hea_cli [secenekler]\n"
         "  --cevrim <ad>      Calistirilacak cevrim: bir cevrim adi (or. sehir_101),\n"
         "                     'egitim', 'test' (varsayilan) veya 'hepsi'\n"
-        "  --strateji <ad>    ice | ev | kural | hepsi (varsayilan)\n"
+        "  --strateji <ad>    ice | ev | kural | model | hepsi (varsayilan)\n"
         "  --adimlar          Her adimi ekrana yaz\n"
         "  --aralik <s>       --adimlar ile her <s> saniyede bir satir (varsayilan 1)\n"
         "  --csv <dosya>      Tum adim sonuclarini CSV dosyasina yaz (SI birimleri)\n"
@@ -132,6 +133,7 @@ std::vector<std::unique_ptr<hea::Strategy>> selectStrategies(const std::string& 
     if (all || name == "ice") out.push_back(std::make_unique<hea::FixedModeStrategy>(hea::Mode::Engine));
     if (all || name == "ev") out.push_back(std::make_unique<hea::FixedModeStrategy>(hea::Mode::Electric));
     if (all || name == "kural") out.push_back(std::make_unique<hea::RuleBasedStrategy>());
+    if (all || name == "model") out.push_back(std::make_unique<hea::ModelBasedStrategy>());
     return out;
 }
 
@@ -195,7 +197,7 @@ int main(int argc, char** argv)
 
     std::vector<std::unique_ptr<hea::Strategy>> strategies = selectStrategies(opt.strategy);
     if (strategies.empty()) {
-        std::fprintf(stderr, "Hata: '%s' adinda strateji yok (ice | ev | kural | hepsi).\n",
+        std::fprintf(stderr, "Hata: '%s' adinda strateji yok (ice | ev | kural | model | hepsi).\n",
                      opt.strategy.c_str());
         return kExitUsage;
     }
