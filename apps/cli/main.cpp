@@ -37,6 +37,8 @@ struct Options {
     bool componentTables = false;
     bool listCycles = false;
     bool help = false;
+    bool compare = false;            // SOC düzeltmeli karşılaştırma (10. adım)
+    bool comparePoints = false;      // karşılaştırmada düzeltme noktalarını da yaz
 };
 
 void printUsage()
@@ -52,6 +54,8 @@ void printUsage()
         "  --egitim-verisi <dosya>\n"
         "                     Secilen cevrimler icin tuketim modeli egitim verisini\n"
         "                     yaz (kural tabanli surusle, iki modun maliyeti) ve cik\n"
+        "  --karsilastir      SOC duzeltmeli karsilastirma tablosu (kurala gore fark)\n"
+        "  --noktalar         --karsilastir ile duzeltme noktalarini da goster\n"
         "  --cevrimler        Egitim ve test cevrimlerinin listesini goster\n"
         "  --tablolar         Bilesen kontrol tablolarini goster\n"
         "  --yardim           Bu metni goster\n");
@@ -95,6 +99,10 @@ bool parseArgs(int argc, char** argv, Options& opt)
             const char* v = needValue("--egitim-verisi");
             if (v == nullptr) return false;
             opt.trainingPath = v;
+        } else if (a == "--karsilastir") {
+            opt.compare = true;
+        } else if (a == "--noktalar") {
+            opt.comparePoints = true;
         } else if (a == "--cevrimler") {
             opt.listCycles = true;
         } else if (a == "--tablolar") {
@@ -203,6 +211,30 @@ int main(int argc, char** argv)
     }
 
     const hea::SimulationConfig cfg;
+
+    // SOC düzeltmeli karşılaştırma: her çevrim ve strateji için ham koşu +
+    // 6 başlangıç SOC'si ile doğrusal düzeltme (bkz. hea/comparison.h)
+    if (opt.compare) {
+        std::vector<cli::ComparisonRow> rows;
+        for (const hea::DriveCycle& c : cycles) {
+            for (const auto& strategy : strategies) {
+                cli::ComparisonRow row;
+                row.cycle = c.name;
+                row.strategy = strategy->name();
+                row.raw = hea::summarize(hea::runCycle(cfg, c, *strategy), cfg.initialSoc);
+                row.rawStoredEnergy_J = hea::storedEnergyReleased_J(
+                    cfg.battery, row.raw.socStart, row.raw.socEnd);
+                row.corrected = hea::socCorrectedFuel(cfg, c, *strategy);
+                rows.push_back(std::move(row));
+            }
+        }
+        if (opt.comparePoints) {
+            cli::printCorrectionPoints(rows);
+        }
+        cli::printComparisonTable(rows, "kural-tabanli");
+        return kExitOk;
+    }
+
     std::vector<cli::RunRecord> runs;
     for (const hea::DriveCycle& c : cycles) {
         for (const auto& strategy : strategies) {

@@ -91,4 +91,11 @@ private:
 // Tek hücre açık devre gerilimi [V], SOC'nin fonksiyonu (tablodan doğrusal ara değer).
 double cellOpenCircuitVoltage(double soc);
 
+// SOC socFrom'dan socTo'ya inerken paketten çıkan depolanan (kimyasal) enerji [J]:
+//   E = Q * N_seri * integral_{socTo}^{socFrom} OCV_hucre(s) ds,   Q = kapasite [C]
+// Pozitif = boşaldı (socTo < socFrom). Uç enerjisinden farklı olarak iç dirençteki
+// I^2*R kayıplarını içermez; yalnızca SOC değişimine bağlıdır ve SOC aynı kaldığında
+// tam olarak sıfırdır.
+double storedEnergyReleased_J(const BatteryParams& params, double socFrom, double socTo);
+
 } // namespace hea

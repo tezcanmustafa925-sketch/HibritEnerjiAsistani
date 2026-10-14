@@ -149,9 +149,34 @@ static void testThermal()
     HEA_CHECK(c.heat_W > w.heat_W);
 }
 
+static void testStoredEnergy()
+{
+    // SOC 0.6 -> 0.5: hücre OCV 3.78 -> 3.72 doğrusal, ortalama 3.75 V
+    //   E = 23400 C * 56 * 3.75 V * 0.1 = 491400 J (136.5 Wh)
+    HEA_CHECK_NEAR(storedEnergyReleased_J(kParams, 0.6, 0.5), 491400.0, 1e-3);
+    // Ters yön: aynı büyüklük, ters işaret (şarj)
+    HEA_CHECK_NEAR(storedEnergyReleased_J(kParams, 0.5, 0.6), -491400.0, 1e-3);
+    // SOC değişmezse tam sıfır
+    HEA_CHECK_NEAR(storedEnergyReleased_J(kParams, 0.63, 0.63), 0.0, 0.0);
+
+    // Depolanan enerji kaybı, uçlardan çekilen enerjiden I^2*R kadar azdır (deşarjda)
+    Battery b(kParams, 0.6, 25.0);
+    double terminal = 0.0;
+    double heat = 0.0;
+    for (int i = 0; i < 100; ++i) {
+        const BatteryStep s = b.step(15000.0, 1.0, 25.0);
+        terminal += s.power_W;
+        heat += s.heat_W;
+    }
+    // OCV*I*dt = V*I*dt + I^2*R*dt  ->  depolanan = uç + ısı (Euler'e göre küçük fark)
+    const double stored = storedEnergyReleased_J(kParams, 0.6, b.soc());
+    HEA_CHECK(std::fabs(stored - (terminal + heat)) / stored < 0.002);
+}
+
 int main()
 {
     testParams();
+    testStoredEnergy();
     testOcvCurve();
     testResistanceVsTemperature();
     testZeroPower();

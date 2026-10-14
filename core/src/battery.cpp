@@ -50,6 +50,21 @@ double cellOpenCircuitVoltage(double soc)
     return kCellOcvTable[i] + (kCellOcvTable[i + 1] - kCellOcvTable[i]) * frac;
 }
 
+double storedEnergyReleased_J(const BatteryParams& params, double socFrom, double socTo)
+{
+    // Yamuk kuralıyla sayısal integral; OCV tablosu parça parça doğrusal olduğundan
+    // 1000 adım fazlasıyla yeterli (hata ~1e-7 bağıl).
+    constexpr int kSteps = 1000;
+    const double h = (socFrom - socTo) / kSteps;
+    double integral = 0.0;
+    for (int i = 0; i < kSteps; ++i) {
+        const double s0 = socTo + h * i;
+        integral += 0.5 * (cellOpenCircuitVoltage(s0) + cellOpenCircuitVoltage(s0 + h)) * h;
+    }
+    const double charge_C = params.capacity_Ah * 3600.0;
+    return charge_C * params.cellsInSeries * integral;
+}
+
 Battery::Battery(const BatteryParams& params, double initialSoc, double initialTemp_C)
     : params_(params)
     , soc_(std::clamp(initialSoc, 0.0, 1.0))

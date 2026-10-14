@@ -18,6 +18,7 @@ hea_add_test(test_simulation)
 hea_add_test(test_rule_based)
 hea_add_test(test_training_data)
 hea_add_test(test_model_based)
+hea_add_test(test_comparison)
 
 # --- Terminal uygulaması testleri ---
 add_test(NAME cli_yardim COMMAND hea_cli --yardim)
@@ -32,6 +33,7 @@ add_test(NAME cli_bilinmeyen_strateji COMMAND hea_cli --strateji yok)
 set_tests_properties(cli_bilinmeyen_secenek cli_bilinmeyen_cevrim cli_bilinmeyen_strateji
                      PROPERTIES WILL_FAIL TRUE)
 # CSV: sehir_101 1241 s -> 1241 adım satırı + başlık
+add_test(NAME cli_karsilastir COMMAND hea_cli --cevrim sehir_101 --karsilastir)
 add_test(NAME cli_csv
          COMMAND ${CMAKE_COMMAND}
                  -DCLI=$<TARGET_FILE:hea_cli>

@@ -2,6 +2,7 @@
 # Kural: bu kütüphane stdout/stderr'e hiçbir şey yazmaz.
 add_library(hea_core STATIC
     src/battery.cpp
+    src/comparison.cpp
     src/consumption_model.cpp
     src/drive_cycle.cpp
     src/electric_motor.cpp
