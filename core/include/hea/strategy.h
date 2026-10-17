@@ -4,6 +4,9 @@
 
 namespace hea {
 
+// Stratejilerin "araç hareket ediyor" saydığı en düşük hız [m/s]
+constexpr double kMovingSpeed_mps = 0.1;
+
 // Stratejinin her adımda gördüğü bilgiler (SI). Simülasyon bunları araç modeli
 // ve bataryadan hesaplayıp stratejiye verir; strateji araç durumunu değiştiremez.
 struct StrategyInput {
@@ -17,13 +20,16 @@ struct StrategyInput {
     double wheelPower_W = 0.0;        // Tekerlekte istenen güç (negatif = fren)
     double soc = 0.0;
     double batteryTemp_C = 0.0;
+    double engineTemp_C = 0.0;          // İçten yanmalı motor sıcaklığı [°C]
     double batteryMaxDischarge_W = 0.0; // Bataryanın bu adımdaki sınırları
     double batteryMaxCharge_W = 0.0;    // (yardımcı yük düşülmüş)
 };
 
 // Stratejinin kararı.
 struct Decision {
-    Mode mode = Mode::Electric;  // Electric veya Engine
+    // Electric veya Engine. Fren / iniş anında Engine, "motor açık kalsın (yakıt
+    // kesmede dönsün)" demektir; enerjiyi yine rejeneratif fren toplar.
+    Mode mode = Mode::Electric;
     // Engine modunda bataryaya ek şarj için istenen elektrik gücü [W] (>= 0)
     double chargePower_W = 0.0;
 };

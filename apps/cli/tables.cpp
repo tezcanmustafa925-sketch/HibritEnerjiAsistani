@@ -90,7 +90,7 @@ void printCycleTable(const char* title, const std::vector<hea::DriveCycle>& cycl
 {
     using hea::units::mpsToKmh;
     std::printf("\n%s\n", title);
-    std::printf("%-11s %7s %8s %8s %8s %6s %7s %7s %6s %5s\n", "cevrim", "sure[s]",
+    std::printf("%-15s %7s %8s %8s %8s %6s %7s %7s %6s %5s\n", "cevrim", "sure[s]",
                 "yol[km]", "ort km/h", "max km/h", "dur[%]", "egim+[%]", "egim-[%]",
                 "yuk[kg]", "T[C]");
     for (const hea::DriveCycle& c : cycles) {
@@ -101,7 +101,7 @@ void printCycleTable(const char* title, const std::vector<hea::DriveCycle>& cycl
             gMin = std::min(gMin, std::tan(s.grade_rad) * 100.0);
         }
         const hea::DriveInput& first = c.samples.front();
-        std::printf("%-11s %7.0f %8.2f %8.1f %8.1f %6.1f %7.1f %8.1f %7.0f %5.0f\n",
+        std::printf("%-15s %7.0f %8.2f %8.1f %8.1f %6.1f %7.1f %8.1f %7.0f %5.0f\n",
                     c.name.c_str(), c.duration_s(), c.distance_m() / 1000.0,
                     mpsToKmh(c.averageSpeed_mps()), mpsToKmh(c.maxSpeed_mps()),
                     100.0 * c.stopFraction(), gMax, gMin, first.payload_kg,

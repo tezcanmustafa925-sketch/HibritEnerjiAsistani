@@ -32,6 +32,7 @@ std::vector<TrainingSample> buildTrainingSamples(const SimulationConfig& config,
         }
         TrainingSample s;
         s.cycle = cycle.name;
+        s.dt_s = cycle.dt_s;
         s.in = in;
 
         PowertrainRequest req;
@@ -39,6 +40,9 @@ std::vector<TrainingSample> buildTrainingSamples(const SimulationConfig& config,
         req.wheelSpeed_radps = in.wheelSpeed_radps;
         req.batteryMaxDischarge_W = in.batteryMaxDischarge_W;
         req.batteryMaxCharge_W = in.batteryMaxCharge_W;
+        // Tüketim modeli sıcak motoru temsil eder: karşı-olgusal çözüm sıcak motorla
+        // yapılır (soğuk motorun fazladan yakıtı modelin değil ısınma modelinin işidir)
+        req.engineTemp_C = kEngineWarmTemp_C;
 
         // EV seçilseydi
         req.requestedMode = Mode::Electric;

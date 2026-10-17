@@ -35,6 +35,7 @@ private:
 // Bu karşı-olgusal çözümler simülasyonun gidişatını etkilemez.
 struct TrainingSample {
     std::string cycle;
+    double dt_s = 1.0;                 // Adım süresi [s] (toplam tüketim = sum(debi * dt))
     StrategyInput in;                  // Özellikler (stratejinin gördüğü her şey)
 
     // EV seçilseydi:
@@ -57,6 +58,8 @@ constexpr double kTrainingChargeRequest_W = 4000.0;
 // Çevrimi `driver` stratejisiyle çalıştırır ve tekerlek gücünün pozitif olduğu
 // (yani EV/ICE kararının anlamlı olduğu) her adım için bir örnek üretir.
 // Fren, iniş ve duruş anları dahil edilmez: o anlarda karar güç aktarma organınındır.
+// Karşı-olgusal çözümler SICAK motorla yapılır: tüketim modeli sıcak motoru temsil
+// eder. Gerçek simülasyonda motor soğuk başlayabilir; o fark ısınma modelinden gelir.
 std::vector<TrainingSample> buildTrainingSamples(const SimulationConfig& config,
                                                  const DriveCycle& cycle, Strategy& driver);
 

@@ -61,6 +61,10 @@ SocCorrectedFuel socCorrectedFuel(const SimulationConfig& config, const DriveCyc
     SocCorrectedFuel out;
     std::vector<double> energy, fuel;
     for (double soc0 : initialSocs) {
+        // Batarya penceresi dışındaki başlangıç SOC'leri anlamsız (ve geçersiz): atla
+        if (soc0 < config.battery.socMin || soc0 > config.battery.socMax) {
+            continue;
+        }
         SimulationConfig cfg = config;
         cfg.initialSoc = soc0;
         const auto steps = runCycle(cfg, cycle, strategy); // strateji her koşuda sıfırlanır
@@ -77,6 +81,10 @@ SocCorrectedFuel socCorrectedFuel(const SimulationConfig& config, const DriveCyc
         fuel.push_back(p.fuel_kg);
     }
     out.fit = fitLine(energy, fuel);
+    if (out.points.empty()) {
+        out.extrapolated = true;
+        return out;
+    }
     if (out.points.size() < 2) {
         out.correctedFuel_kg = out.fit.intercept;
         out.extrapolated = true;

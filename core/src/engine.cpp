@@ -25,7 +25,10 @@ bool EngineParams::isValid() const
     }
     return idleSpeed_radps > 0.0 && maxSpeed_radps > idleSpeed_radps
         && indicatedEfficiency > 0.0 && indicatedEfficiency < 1.0
-        && frictionTorque0_Nm >= 0.0 && frictionTorqueSlope >= 0.0;
+        && frictionTorque0_Nm >= 0.0 && frictionTorqueSlope >= 0.0
+        && coldFrictionIncrease >= 0.0 && thermalCapacity_JperK > 0.0
+        && heatToCoolantFraction >= 0.0 && heatToCoolantFraction <= 1.0
+        && heatLoss_WperK >= 0.0;
 }
 
 Engine::Engine(const EngineParams& params)
@@ -54,29 +57,49 @@ double Engine::maxTorque(double speed_radps) const
     return ys[i - 1] + (ys[i] - ys[i - 1]) * frac;
 }
 
-double Engine::frictionTorque(double speed_radps) const
+double Engine::coldFrictionFactor(double engineTemp_C) const
 {
-    // T_sur = a + b*omega
-    return params_.frictionTorque0_Nm + params_.frictionTorqueSlope * speed_radps;
+    // x = clamp((T_sicak - T_m) / (T_sicak - 20), 0, 1.5)
+    const double x = std::clamp((kEngineWarmTemp_C - engineTemp_C) / (kEngineWarmTemp_C - 20.0),
+                                0.0, 1.5);
+    return 1.0 + params_.coldFrictionIncrease * x;
 }
 
-double Engine::fuelPower(double torque_Nm, double speed_radps) const
+double Engine::frictionTorque(double speed_radps, double engineTemp_C) const
+{
+    // T_sur = (a + b*omega) * soğukluk çarpanı
+    return (params_.frictionTorque0_Nm + params_.frictionTorqueSlope * speed_radps)
+         * coldFrictionFactor(engineTemp_C);
+}
+
+double Engine::fuelPower(double torque_Nm, double speed_radps, double engineTemp_C) const
 {
     // P_yakit = (T + T_sur) * omega / e
     const double t = std::max(torque_Nm, 0.0);
-    return (t + frictionTorque(speed_radps)) * speed_radps / params_.indicatedEfficiency;
+    return (t + frictionTorque(speed_radps, engineTemp_C)) * speed_radps
+         / params_.indicatedEfficiency;
 }
 
-double Engine::fuelRate(double torque_Nm, double speed_radps) const
+double Engine::fuelRate(double torque_Nm, double speed_radps, double engineTemp_C) const
 {
     // m_dot = P_yakit / LHV
-    return fuelPower(torque_Nm, speed_radps) / constants::kGasolineLhv;
+    return fuelPower(torque_Nm, speed_radps, engineTemp_C) / constants::kGasolineLhv;
 }
 
-double Engine::efficiency(double torque_Nm, double speed_radps) const
+double Engine::efficiency(double torque_Nm, double speed_radps, double engineTemp_C) const
 {
-    const double pf = fuelPower(torque_Nm, speed_radps);
+    const double pf = fuelPower(torque_Nm, speed_radps, engineTemp_C);
     return pf > 0.0 ? std::max(torque_Nm, 0.0) * speed_radps / pf : 0.0;
+}
+
+double Engine::nextTemperature(double engineTemp_C, double fuelPower_W, double ambientTemp_C,
+                               double dt_s) const
+{
+    // C * dT/dt = f * P_yakit - hA * (T - T_ortam)  (açık Euler), termostat: T <= T_sicak
+    const double dTdt = (params_.heatToCoolantFraction * fuelPower_W
+                         - params_.heatLoss_WperK * (engineTemp_C - ambientTemp_C))
+                      / params_.thermalCapacity_JperK;
+    return std::min(engineTemp_C + dTdt * dt_s, std::max(kEngineWarmTemp_C, ambientTemp_C));
 }
 
 bool Engine::canDeliver(double torque_Nm, double speed_radps) const

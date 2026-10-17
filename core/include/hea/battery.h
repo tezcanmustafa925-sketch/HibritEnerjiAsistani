@@ -15,6 +15,11 @@ struct BatteryParams {
     // İç direncin sıcaklık katsayısı [1/K]: R(T) = R25 * exp(k * (25 - T)).
     // Soğukta iyon hareketi yavaşladığı için direnç üstel olarak artar.
     double resistanceTempCoeff_perK = 0.03;
+    // Polarizasyon (RC) dalı: R0'a seri bir R1 || C1. Akım değişince gerilim
+    // anında değil, tau = R1*C1 zaman sabitiyle oturur (difüzyon / çift katman etkisi).
+    // R1 de R0 ile aynı sıcaklık katsayısıyla değişir. R1 = 0 ise dal yoktur.
+    double polarizationResistance_Ohm = 0.05;
+    double polarizationTimeConstant_s = 20.0;
     // Bataryadan çekilebilecek / bataryaya verilebilecek en büyük güç [W] (pozitif büyüklük)
     double maxDischargePower_W = 27000.0;
     double maxChargePower_W = 25000.0;
@@ -38,25 +43,29 @@ struct BatteryStep {
     double current_A = 0.0;        // Akım [A]
     double voltage_V = 0.0;        // Uç gerilimi [V]
     double ocv_V = 0.0;            // Açık devre gerilimi [V]
-    double heat_W = 0.0;           // İç dirençte ısıya dönen güç I^2*R [W]
+    double heat_W = 0.0;           // İç kayıp I*(OCV - V) = R0*I^2 + V1*I [W]
+    double polarization_V = 0.0;   // Adım sonundaki RC dalı gerilimi V1 [V]
     double soc = 0.0;              // Adım sonundaki SOC [0..1]
     double temp_C = 0.0;           // Adım sonundaki sıcaklık [°C]
     bool limited = false;          // İstenen güç sınırlar yüzünden kısıldı mı?
 };
 
-// Eşdeğer devre batarya modeli (Rint modeli): ideal gerilim kaynağı (OCV)
-// ile seri bağlı tek bir iç direnç.
+// Eşdeğer devre batarya modeli (Thevenin, 1 RC): ideal gerilim kaynağı (OCV),
+// seri iç direnç R0 ve bir polarizasyon dalı (R1 || C1).
 //
-//   Uç gerilimi:  V = OCV(SOC) - I * R(T)
-//   Uç gücü:      P = V * I = OCV * I - R * I^2
+//   Uç gerilimi:  V = OCV(SOC) - I * R0(T) - V1
+//   RC dalı:      dV1/dt = I / C1 - V1 / (R1 * C1)
+//   Uç gücü:      P = V * I = (OCV - V1) * I - R0 * I^2
 //
-// P verildiğinde I, bu ikinci derece denklemin fiziksel (küçük) kökünden bulunur:
-//   R*I^2 - OCV*I + P = 0  ->  I = (OCV - sqrt(OCV^2 - 4*R*P)) / (2*R)
-// Aynı formül şarjda (P < 0) da geçerlidir ve negatif akım verir.
+// V1 adım başındaki değerinde sabit tutulursa P verildiğinde I, ikinci derece
+// denklemin fiziksel (küçük) kökünden bulunur (E = OCV - V1):
+//   R0*I^2 - E*I + P = 0  ->  I = (E - sqrt(E^2 - 4*R0*P)) / (2*R0)
+// Aynı formül şarjda (P < 0) da geçerlidir ve negatif akım verir. Sonra V1 tam
+// (üstel) çözümle güncellenir: V1' = V1*exp(-dt/tau) + R1*I*(1 - exp(-dt/tau)).
 //
 // Varsayımlar:
-//   - Gerilim dinamikleri (RC polarizasyon) yok; akım değişince gerilim anında oturur.
-//   - Coulomb verimi %100: kayıpların tamamı iç dirençteki I^2*R ısısıdır.
+//   - Tek RC dalı; daha yavaş difüzyon etkileri yok.
+//   - Coulomb verimi %100: kayıpların tamamı iç dirençlerdeki ısıdır.
 //   - OCV yalnızca SOC'ye bağlı; sıcaklık ve yaşlanma OCV'yi etkilemez.
 //   - Hücreler dengeli; paket tek büyük hücre gibi davranır.
 //   - Hücre gerilim sınırları yerine güç, akım ve SOC sınırları kullanılır.
@@ -70,8 +79,10 @@ public:
 
     // Mevcut SOC'deki açık devre gerilimi [V]
     double openCircuitVoltage() const;
-    // Mevcut sıcaklıktaki iç direnç [Ohm]
+    // Mevcut sıcaklıktaki seri (ohmik) iç direnç R0 [Ohm]
     double internalResistance() const;
+    // Polarizasyon dalının gerilimi V1 [V] (pozitif = deşarj yönünde)
+    double polarizationVoltage() const { return v1_; }
 
     // Şu anki durumda verilebilecek en büyük deşarj / şarj gücü [W] (pozitif büyüklük).
     // Güç, akım ve SOC sınırlarının en kısıtlayıcısıdır.
@@ -86,6 +97,7 @@ private:
     BatteryParams params_;
     double soc_;
     double temp_C_;
+    double v1_ = 0.0;
 };
 
 // Tek hücre açık devre gerilimi [V], SOC'nin fonksiyonu (tablodan doğrusal ara değer).

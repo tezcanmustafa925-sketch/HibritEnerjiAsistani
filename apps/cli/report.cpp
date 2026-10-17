@@ -39,10 +39,10 @@ void printStep(const hea::StepResult& r)
 void printSummaryTable(const std::vector<RunRecord>& runs)
 {
     std::printf("\nOZET (ham degerler, SOC farki duzeltilmemis; adil karsilastirma icin: --karsilastir)\n");
-    std::printf("%-11s %-13s %7s %8s %7s %6s %6s %7s %5s %5s %5s %5s %6s %6s %6s\n",
+    std::printf("%-15s %-13s %7s %8s %7s %6s %6s %7s %5s %5s %5s %5s %6s %6s %6s\n",
                 "cevrim", "strateji", "yol", "L/100km", "yakit", "SOC0", "SOC1", "dSOC",
                 "EV", "ICE", "REG", "DUR", "calis.", "rejen", "uyg.yok");
-    std::printf("%-11s %-13s %7s %8s %7s %6s %6s %7s %5s %5s %5s %5s %6s %6s %6s\n",
+    std::printf("%-15s %-13s %7s %8s %7s %6s %6s %7s %5s %5s %5s %5s %6s %6s %6s\n",
                 "", "", "[km]", "", "[L]", "[%]", "[%]", "[%]", "[%]", "[%]", "[%]", "[%]",
                 "[adet]", "[Wh]", "[%]");
     std::string lastCycle;
@@ -52,7 +52,7 @@ void printSummaryTable(const std::vector<RunRecord>& runs)
         }
         lastCycle = run.cycle;
         const hea::RunSummary& s = run.summary;
-        std::printf("%-11s %-13s %7.2f %8.2f %7.3f %6.1f %6.1f %+7.1f %5.1f %5.1f %5.1f %5.1f "
+        std::printf("%-15s %-13s %7.2f %8.2f %7.3f %6.1f %6.1f %+7.1f %5.1f %5.1f %5.1f %5.1f "
                     "%6d %6.0f %6.1f\n",
                     run.cycle.c_str(), run.strategy.c_str(), s.distance_m / 1000.0,
                     s.fuelPer100km_L, s.fuel_L, 100.0 * s.socStart, 100.0 * s.socEnd,
@@ -60,17 +60,26 @@ void printSummaryTable(const std::vector<RunRecord>& runs)
                     100.0 * s.timeEngine, 100.0 * s.timeRegen, 100.0 * s.timeStopped,
                     s.engineStarts, s.regenEnergy_J / 3600.0, 100.0 * s.overriddenFraction);
     }
+    // Enerji dengesi uyarısı: batarya alt sınırdayken yardımcı yük karşılanamadıysa
+    for (const RunRecord& run : runs) {
+        if (run.summary.unmetElectricalEnergy_J > 3600.0) { // 1 Wh
+            std::printf("UYARI: %s / %s: %.1f Wh elektrik yuku karsilanamadi "
+                        "(batarya SOC alt sinirinda, motor calismiyordu)\n",
+                        run.cycle.c_str(), run.strategy.c_str(),
+                        run.summary.unmetElectricalEnergy_J / 3600.0);
+        }
+    }
 }
 
 void printCorrectionPoints(const std::vector<ComparisonRow>& rows)
 {
     std::printf("\nDUZELTME NOKTALARI (her satir bir kosu; E_bat = depolanan enerji kaybi)\n");
-    std::printf("%-11s %-13s %6s %6s %8s %8s\n", "cevrim", "strateji", "SOC0", "SOC1",
+    std::printf("%-15s %-13s %6s %6s %8s %8s\n", "cevrim", "strateji", "SOC0", "SOC1",
                 "E_bat", "yakit");
-    std::printf("%-11s %-13s %6s %6s %8s %8s\n", "", "", "[%]", "[%]", "[Wh]", "[g]");
+    std::printf("%-15s %-13s %6s %6s %8s %8s\n", "", "", "[%]", "[%]", "[Wh]", "[g]");
     for (const ComparisonRow& r : rows) {
         for (const hea::CorrectionPoint& p : r.corrected.points) {
-            std::printf("%-11s %-13s %6.1f %6.1f %+8.1f %8.1f\n", r.cycle.c_str(),
+            std::printf("%-15s %-13s %6.1f %6.1f %+8.1f %8.1f\n", r.cycle.c_str(),
                         r.strategy.c_str(), 100.0 * p.initialSoc, 100.0 * p.finalSoc,
                         p.batteryEnergy_J / 3600.0, 1000.0 * p.fuel_kg);
         }
@@ -88,9 +97,9 @@ void printComparisonTable(const std::vector<ComparisonRow>& rows,
                 "b = bu iki nokta arasi egim. R2 = tum noktalara oturan dogru (dogrusallik).\n"
                 "'*' = sifir kapsanmadi, dis degerleme (guvenilirligi dusuk).\n"
                 "Kontrol: esdeger yakit = yakit + k*E_bat, k = 2.8/LHV (1 kWh = 234 g).\n");
-    std::printf("\n%-11s %-13s %7s %6s %8s %6s %7s %8s %7s %8s\n", "cevrim", "strateji",
+    std::printf("\n%-15s %-13s %7s %6s %8s %6s %7s %8s %7s %8s\n", "cevrim", "strateji",
                 "ham", "dSOC", "DUZELT.", "R2", "b", "fark", "esdeger", "fark");
-    std::printf("%-11s %-13s %7s %6s %8s %6s %7s %8s %7s %8s\n", "", "", "L/100km", "[%]",
+    std::printf("%-15s %-13s %7s %6s %8s %6s %7s %8s %7s %8s\n", "", "", "L/100km", "[%]",
                 "L/100km", "", "[g/kWh]", "[%]", "L/100km", "[%]");
 
     // Referans stratejinin çevrim bazında değerleri
@@ -120,7 +129,7 @@ void printComparisonTable(const std::vector<ComparisonRow>& rows,
         char corrText[16];
         std::snprintf(corrText, sizeof(corrText), "%.2f%s", corr,
                       r.corrected.extrapolated ? "*" : "");
-        std::printf("%-11s %-13s %7.2f %+6.1f %8s %6.3f %7.0f %+8.1f %7.2f %+8.1f\n",
+        std::printf("%-15s %-13s %7.2f %+6.1f %8s %6.3f %7.0f %+8.1f %7.2f %+8.1f\n",
                     r.cycle.c_str(), r.strategy.c_str(), r.raw.fuelPer100km_L,
                     100.0 * (r.raw.socEnd - r.raw.socStart), corrText, r.corrected.fit.r2,
                     -r.corrected.localSlope_kgPerJ * 3.6e9, pctDiff(corr, corrRef), eq,

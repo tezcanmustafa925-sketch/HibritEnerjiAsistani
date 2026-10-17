@@ -4,7 +4,7 @@ namespace hea {
 
 // Araç gövdesinin (şasi) sabit parametreleri. Hepsi SI biriminde.
 // Varsayılan değerler kompakt bir tam hibrit binek araca (Prius sınıfı) yakın seçildi.
-// Güç aktarma organı (motor, batarya) parametreleri 3. adımda ayrı bir yapıda gelecek.
+// Güç aktarma organı (motor, batarya) parametreleri ayrı yapılardadır.
 struct VehicleParams {
     // Boş araç kütlesi [kg] (sürücü ve yük hariç)
     double curbMass_kg = 1380.0;

@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "hea/defaults.h"
 #include "hea/drive_cycle.h"
 #include "hea/simulation.h"
 #include "hea/strategy.h"
@@ -80,12 +81,13 @@ struct SocCorrectedFuel {
 std::vector<double> defaultCorrectionSocs();
 
 // Stratejiyi her başlangıç SOC'si için çalıştırıp doğrusal SOC düzeltmesi yapar.
+// Batarya penceresinin (socMin..socMax) dışındaki başlangıç SOC'leri atlanır.
 SocCorrectedFuel socCorrectedFuel(const SimulationConfig& config, const DriveCycle& cycle,
                                   Strategy& strategy,
                                   const std::vector<double>& initialSocs = defaultCorrectionSocs());
 
 // Kontrol yöntemi için varsayılan k [kg/J]: 1 J batarya enerjisi = 2.8 J yakıt
-constexpr double kDefaultFuelPerBatteryJoule = 2.8 / constants::kGasolineLhv;
+constexpr double kDefaultFuelPerBatteryJoule = defaults::kEquivalenceFactor / constants::kGasolineLhv;
 
 // Eşdeğer yakıt [kg]: m_yakit + k * E_bat (E_bat: depolanan enerji kaybı)
 double equivalentFuel_kg(double fuel_kg, double batteryEnergy_J,

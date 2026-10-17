@@ -17,4 +17,10 @@ bool writeStepsCsv(const std::string& path, const std::vector<RunRecord>& runs);
 // Tüketim modeli eğitim örneklerini yazar (özellikler + iki modun maliyeti).
 bool writeTrainingCsv(const std::string& path, const std::vector<hea::TrainingSample>& samples);
 
+// Her koşunun özeti (bir satır = bir çevrim + strateji).
+bool writeSummaryCsv(const std::string& path, const std::vector<RunRecord>& runs);
+
+// SOC düzeltmeli karşılaştırma (bir satır = bir çevrim + strateji).
+bool writeComparisonCsv(const std::string& path, const std::vector<ComparisonRow>& rows);
+
 } // namespace cli

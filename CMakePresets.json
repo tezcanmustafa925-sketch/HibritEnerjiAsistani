@@ -1,0 +1,36 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "varsayilan",
+      "displayName": "Varsayilan (sistem uretecisi)",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": { "HEA_BUILD_TESTS": "ON" }
+    },
+    {
+      "name": "ninja-release",
+      "displayName": "Ninja, Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/ninja-release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "HEA_BUILD_TESTS": "ON" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "varsayilan", "configurePreset": "varsayilan", "configuration": "Release" },
+    { "name": "ninja-release", "configurePreset": "ninja-release" }
+  ],
+  "testPresets": [
+    {
+      "name": "varsayilan",
+      "configurePreset": "varsayilan",
+      "configuration": "Release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "ninja-release",
+      "configurePreset": "ninja-release",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

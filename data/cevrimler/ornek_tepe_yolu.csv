@@ -1,0 +1,27 @@
+# Ornek cevrim dosyasi: tepelik banliyo yolu, soguk hava, 2 yolcu.
+# Bicim: time_s,speed_kmh[,grade_percent][,payload_kg][,ambient_C]
+# Zaman araliklari duzensiz olabilir; 1 s'ye dogrusal ara degerle yeniden orneklenir.
+# Kullanim: hea_cli --cevrim-dosyasi data/cevrimler/ornek_tepe_yolu.csv --strateji hepsi --ozet
+time_s,speed_kmh,grade_percent,payload_kg,ambient_C
+0,0,0,150,5
+10,0,0,150,5
+25,40,0,150,5
+60,50,1,150,5
+90,50,4,150,5
+150,45,6,150,5
+200,60,3,150,5
+260,70,0,150,5
+320,70,-3,150,5
+380,60,-6,150,5
+420,40,-4,150,5
+440,0,-1,150,5
+470,0,0,150,5
+490,30,0,150,5
+550,50,2,150,5
+620,80,2,150,5
+720,90,0,150,5
+800,90,-2,150,5
+850,50,0,150,5
+880,20,0,150,5
+900,0,0,150,5
+915,0,0,150,5

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <stdexcept>
 
 #include "hea/units.h"
 
@@ -19,6 +20,13 @@ ModelBasedStrategy::ModelBasedStrategy(const ModelBasedParams& params,
     : p_(params)
     , model_(model)
 {
+    if (!p_.isValid()) {
+        throw std::invalid_argument("Model tabanli strateji parametreleri gecersiz");
+    }
+    if (!model_.valid()) {
+        // Katsayı dosyası ile C++ özellik listesi uyumsuz: yanlış kararlar vermek yerine dur
+        throw std::invalid_argument("Tuketim modeli gecersiz (consumption_model_coeffs.h uyumsuz)");
+    }
 }
 
 void ModelBasedStrategy::reset()
@@ -45,10 +53,15 @@ Decision ModelBasedStrategy::decide(const StrategyInput& in)
         engineOnTime_s_ += dt;
     }
 
-    // Fren, iniş, serbest yuvarlanma veya durma: tahrik gerekmiyor
+    // Fren, iniş, serbest yuvarlanma veya durma: tahrik gerekmiyor. Asgari süre
+    // dolmadıysa ve araç hareket ediyorsa motor yakıt kesmede açık kalır.
     if (in.wheelPower_W <= 0.0) {
-        engineOn_ = false;
         last_ = EcmsCosts{};
+        if (engineOn_ && in.speed_mps > kMovingSpeed_mps
+            && engineOnTime_s_ < p_.minEngineOnTime_s) {
+            return Decision{Mode::Engine, 0.0};
+        }
+        engineOn_ = false;
         return Decision{Mode::Electric, 0.0};
     }
 
