@@ -33,6 +33,7 @@ bool BatteryParams::isValid() const
     return cellsInSeries > 0
         && capacity_Ah > 0.0
         && internalResistance25_Ohm > 0.0
+        && polarizationResistance_Ohm >= 0.0 && polarizationTimeConstant_s > 0.0
         && maxDischargePower_W > 0.0
         && maxChargePower_W > 0.0
         && maxCurrent_A > 0.0
@@ -89,10 +90,11 @@ double Battery::availableDischargePower() const
     if (soc_ <= params_.socMin) {
         return 0.0;
     }
-    const double ocv = openCircuitVoltage();
+    // RC dalının gerilimi kaynaktan düşülür: E = OCV - V1
+    const double ocv = openCircuitVoltage() - v1_;
     const double r = internalResistance();
     const double iMax = params_.maxCurrent_A;
-    // Akım sınırındaki uç gücü: P = OCV*I - R*I^2
+    // Akım sınırındaki uç gücü: P = E*I - R*I^2
     const double pAtCurrentLimit = ocv * iMax - r * iMax * iMax;
     // Rint modelinin kuramsal tepe gücü OCV^2/(4R) (V = OCV/2 noktası)
     const double pTheoretical = ocv * ocv / (4.0 * r);
@@ -104,10 +106,10 @@ double Battery::availableChargePower() const
     if (soc_ >= params_.socMax) {
         return 0.0;
     }
-    const double ocv = openCircuitVoltage();
+    const double ocv = openCircuitVoltage() - v1_;
     const double r = internalResistance();
     const double iMax = params_.maxCurrent_A;
-    // Şarjda I = -iMax iken uç gücü büyüklüğü: |P| = iMax * (OCV + R*iMax)
+    // Şarjda I = -iMax iken uç gücü büyüklüğü: |P| = iMax * (E + R*iMax)
     const double pAtCurrentLimit = iMax * (ocv + r * iMax);
     return std::min(params_.maxChargePower_W, pAtCurrentLimit);
 }
@@ -126,15 +128,24 @@ BatteryStep Battery::step(double requestedPower_W, double dt_s, double ambientTe
     }
     out.limited = (power != requestedPower_W);
 
-    // 2) Elektriksel çözüm (adım başındaki SOC ve sıcaklıkla)
+    // 2) Elektriksel çözüm (adım başındaki SOC, sıcaklık ve V1 ile)
     const double ocv = openCircuitVoltage();
     const double r = internalResistance();
-    const double current = currentForPower(ocv, r, power);
+    const double current = currentForPower(ocv - v1_, r, power);
     out.power_W = power;
     out.current_A = current;
     out.ocv_V = ocv;
-    out.voltage_V = ocv - current * r; // V = OCV - I*R
-    out.heat_W = current * current * r; // Joule ısısı I^2*R
+    out.voltage_V = ocv - current * r - v1_; // V = OCV - I*R0 - V1
+    // İç kayıp = kimyasal güç - uç gücü = I*(OCV - V) = R0*I^2 + V1*I
+    out.heat_W = current * (ocv - out.voltage_V);
+
+    // RC dalı (I adım boyunca sabitken tam çözüm):
+    //   V1' = V1*exp(-dt/tau) + R1(T)*I*(1 - exp(-dt/tau))
+    const double tempFactor = r / params_.internalResistance25_Ohm;
+    const double r1 = params_.polarizationResistance_Ohm * tempFactor;
+    const double decay = std::exp(-dt_s / params_.polarizationTimeConstant_s);
+    v1_ = v1_ * decay + r1 * current * (1.0 - decay);
+    out.polarization_V = v1_;
 
     // 3) SOC güncelle (Coulomb sayımı):
     //    dSOC/dt = -I / Q,  Q = kapasite [Ah] * 3600 [C]

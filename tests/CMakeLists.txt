@@ -47,17 +47,35 @@ add_test(NAME cli_csv
 
 # --- Python model eğitimi (Python ve paketleri bulunursa) ---
 find_package(Python3 COMPONENTS Interpreter)
+set(HEA_PYTHON_OK OFF)
 if(Python3_Interpreter_FOUND)
+    # Yorumlayıcı yetmez: paketler (model/requirements.txt) de kurulu olmalı,
+    # yoksa test başarısız olmak yerine atlanır.
+    execute_process(
+        COMMAND ${Python3_EXECUTABLE} -c "import numpy, pandas, sklearn"
+        RESULT_VARIABLE _hea_py_rc OUTPUT_QUIET ERROR_QUIET)
+    if(_hea_py_rc EQUAL 0)
+        set(HEA_PYTHON_OK ON)
+    else()
+        message(STATUS "Python paketleri eksik (pip install -r model/requirements.txt): "
+                       "py_model_egitimi testi atlandi")
+    endif()
+endif()
+if(HEA_PYTHON_OK)
     add_test(NAME py_model_egitimi
              COMMAND ${CMAKE_COMMAND}
                      -DCLI=$<TARGET_FILE:hea_cli>
                      -DPYTHON=${Python3_EXECUTABLE}
                      -DSCRIPT=${PROJECT_SOURCE_DIR}/model/egit.py
                      -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/model_test
+                     -DREFERENCE=${PROJECT_SOURCE_DIR}/model/tuketim_modeli.json
                      -P ${CMAKE_CURRENT_SOURCE_DIR}/check_model.cmake)
     # Uretilmis C++ katsayi dosyasi JSON ile guncel mi?
+endif()
+if(Python3_Interpreter_FOUND)
+    # Yalnızca standart kütüphane kullanır; paketler olmadan da çalışır
     add_test(NAME py_katsayilar_guncel
              COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/model/cpp_aktar.py --kontrol)
 else()
-    message(STATUS "Python bulunamadi: py_model_egitimi testi atlandi")
+    message(STATUS "Python bulunamadi: Python testleri atlandi")
 endif()

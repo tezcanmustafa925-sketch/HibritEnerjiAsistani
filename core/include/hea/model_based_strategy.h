@@ -1,6 +1,7 @@
 #pragma once
 
 #include "hea/consumption_model.h"
+#include "hea/defaults.h"
 #include "hea/strategy.h"
 
 namespace hea {
@@ -8,12 +9,12 @@ namespace hea {
 // Model tabanlı stratejinin parametreleri (benim seçimlerim).
 // Hiçbiri test çevrimlerine bakılarak ayarlanmadı.
 struct ModelBasedParams {
-    double socTarget = 0.60;
+    double socTarget = defaults::kSocTarget;
     // Eşdeğerlik katsayısı s0 [-]: bataryadaki 1 J elektriğin kaç J yakıt
     // değerinde olduğu. Tüketim modelinin ortalama şarj maliyetinden türetildi:
     // ~6.5e-8 kg/J * 43e6 J/kg = ~2.8 (8c: 1 kWh elektrik ~234 g yakıt).
     // Böylece SOC hedefteyken ICE ile şarj etmek ne kârlı ne zararlı olur.
-    double equivalenceFactor = 2.8;
+    double equivalenceFactor = defaults::kEquivalenceFactor;
     // SOC geri beslemesi: s = s0 * (1 + kazanc * (SOC_hedef - SOC)).
     // SOC 0.50'de s = 1.5*s0 (elektrik pahalı, ICE ve şarj tercih edilir),
     // 0.70'te s = 0.5*s0 (elektrik ucuz, EV tercih edilir).
@@ -21,9 +22,10 @@ struct ModelBasedParams {
     double socMinForEv = 0.35;      // Bunun altında EV yasak (batarya koruması)
     double chargePower_W = 8000.0;  // Şarj kârlıysa istenen güç (kural tabanlıyla aynı üst sınır)
     // Motor çalıştırma maliyetinin dağıtılması: motor kapalıyken ICE maliyetine
-    // (çalıştırma yakıtı / asgari çalışma süresi) eklenir. Simülasyondaki ceza ile aynı.
-    double engineStartFuel_kg = 0.2e-3;
-    double minEngineOnTime_s = 10.0; // Kural tabanlıyla aynı (adil karşılaştırma)
+    // (çalıştırma yakıtı / asgari çalışma süresi) eklenir. Simülasyondaki ceza ile aynı
+    // kaynaktan gelir (defaults.h); yapılandırma dosyası ikisini birlikte değiştirir.
+    double engineStartFuel_kg = defaults::kEngineStartFuel_kg;
+    double minEngineOnTime_s = defaults::kMinEngineOnTime_s; // Kural tabanlıyla aynı
 
     bool isValid() const;
 };
@@ -57,6 +59,7 @@ struct EcmsCosts {
 // (s/LHV > c, yani SOC hedefin altındaysa) şarj kârlıdır.
 class ModelBasedStrategy : public Strategy {
 public:
+    // Parametreler veya tüketim modeli geçersizse std::invalid_argument fırlatır.
     explicit ModelBasedStrategy(const ModelBasedParams& params = ModelBasedParams{},
                                 const ConsumptionModel& model =
                                     ConsumptionModel::fromGeneratedCoefficients());

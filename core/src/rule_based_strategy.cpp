@@ -1,6 +1,7 @@
 #include "hea/rule_based_strategy.h"
 
 #include <algorithm>
+#include <stdexcept>
 
 namespace hea {
 
@@ -16,6 +17,9 @@ bool RuleBasedParams::isValid() const
 RuleBasedStrategy::RuleBasedStrategy(const RuleBasedParams& params)
     : p_(params)
 {
+    if (!p_.isValid()) {
+        throw std::invalid_argument("Kural tabanli strateji parametreleri gecersiz");
+    }
 }
 
 void RuleBasedStrategy::reset()
@@ -41,8 +45,15 @@ Decision RuleBasedStrategy::decide(const StrategyInput& in)
         engineOnTime_s_ += dt;
     }
 
-    // Fren, iniş, serbest yuvarlanma veya durma: tahrik gerekmiyor
+    // Fren, iniş, serbest yuvarlanma veya durma: tahrik gerekmiyor. Enerjiyi güç
+    // aktarma organı rejeneratif frenle geri kazanır. Motor yeni açıldıysa (asgari süre
+    // dolmadıysa) ve araç hareket ediyorsa kapatılmaz, yakıt kesmede döner: kısa bir
+    // frenlemeden sonra yeniden çalıştırma cezası ödenmez.
     if (in.wheelPower_W <= 0.0) {
+        if (engineOn_ && in.speed_mps > kMovingSpeed_mps
+            && engineOnTime_s_ < p_.minEngineOnTime_s) {
+            return Decision{Mode::Engine, 0.0};
+        }
         engineOn_ = false;
         return Decision{Mode::Electric, 0.0};
     }

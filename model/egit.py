@@ -22,11 +22,17 @@ Girdi : hea_cli --egitim-verisi ile üretilen CSV dosyaları (eğitim ve test).
 Lineer modelin yeterli olup olmadığını görmek için, yalnızca Python'da kalan
 doğrusal olmayan bir kıyas modeli (gradient boosting) de eğitilir.
 
+Hedefler SICAK motor içindir: C++ karşı-olgusal çözümleri sıcak motorla yapar.
+Soğuk motorun fazladan yakıtı modelin değil simülasyondaki ısınma modelinin işidir.
+
 Kullanım:
   python model/egit.py [--egitim build/veri/egitim.csv] [--test build/veri/test.csv]
                        [--cikti model/tuketim_modeli.json] [--grafik build/model]
-                       [--kontrol]
---kontrol: test doğruluğu eşiklerin altındaysa 1 ile çık (CTest için).
+                       [--kontrol] [--referans model/tuketim_modeli.json]
+--kontrol : test doğruluğu eşiklerin altındaysa 1 ile çık (CTest için).
+--referans: depodaki (C++'a aktarılmış) model, yeni eğitilen modelle aynı test
+            verisinde karşılaştırılır; toplam tahminler %1'den fazla ayrışıyorsa
+            1 ile çık. Böylece fizik değişip katsayılar eskirse test bunu yakalar.
 """
 
 import argparse
@@ -54,6 +60,13 @@ OZELLIK_TANIMLARI = {
     "w^3": lambda d: d["wheel_speed_radps"] ** 3,
     "T*w": lambda d: d["wheel_torque_Nm"] * d["wheel_speed_radps"],
 }
+
+def adim_suresi(d: pd.DataFrame) -> np.ndarray:
+    """Her örneğin adım süresi [s] (eski CSV'lerde sütun yoksa 1 s)."""
+    if "dt_s" not in d.columns:
+        return np.ones(len(d))
+    return d["dt_s"].to_numpy(dtype=float)
+
 
 # Model tanımları: hedef sütun (ya da hesap), özellikler, hangi satırlar kullanılır
 MODELLER = {
@@ -97,15 +110,15 @@ def ozellik_matrisi(d: pd.DataFrame, adlar: list[str]) -> np.ndarray:
     return np.column_stack([OZELLIK_TANIMLARI[a](d).to_numpy(dtype=float) for a in adlar])
 
 
-def metrikler(gercek: np.ndarray, tahmin: np.ndarray) -> dict:
+def metrikler(gercek: np.ndarray, tahmin: np.ndarray, dt: np.ndarray) -> dict:
     """R^2, ortalama mutlak hata ve toplam (çevrim boyu birikimli) bağıl hata."""
-    toplam = float(np.sum(gercek))
+    # Toplam tüketim = sum(debi * dt); adım süresi her örnekte ayrı tutulur
+    toplam = float(np.sum(gercek * dt))
     return {
         "n": int(len(gercek)),
         "r2": float(r2_score(gercek, tahmin)),
         "mae": float(mean_absolute_error(gercek, tahmin)),
-        # dt = 1 s olduğu için toplam debi = toplam tüketim; bağıl hata bunun üzerinden
-        "toplam_hata": float((np.sum(tahmin) - toplam) / toplam) if toplam != 0 else 0.0,
+        "toplam_hata": float((np.sum(tahmin * dt) - toplam) / toplam) if toplam != 0 else 0.0,
     }
 
 
@@ -125,15 +138,16 @@ def egit_ve_degerlendir(ad, tanim, egitim, test, grafik_klasoru):
         "ozellikler": tanim["ozellikler"],
         "katsayilar": [float(c) for c in lineer.coef_],
         "kesisim": float(lineer.intercept_),
-        "egitim": metrikler(y_tr, lineer.predict(x_tr)),
-        "test": metrikler(y_te, lineer.predict(x_te)),
-        "test_kiyas_gbr": metrikler(y_te, kiyas.predict(ozellik_matrisi(te, ham))),
+        "egitim": metrikler(y_tr, lineer.predict(x_tr), adim_suresi(tr)),
+        "test": metrikler(y_te, lineer.predict(x_te), adim_suresi(te)),
+        "test_kiyas_gbr": metrikler(y_te, kiyas.predict(ozellik_matrisi(te, ham)), adim_suresi(te)),
         "test_cevrim": {},
     }
     for cevrim, grup in te.groupby("cycle", sort=False):
         sonuc["test_cevrim"][cevrim] = metrikler(
             tanim["hedef"](grup).to_numpy(),
             lineer.predict(ozellik_matrisi(grup, tanim["ozellikler"])),
+            adim_suresi(grup),
         )
 
     if grafik_klasoru is not None:
@@ -188,6 +202,39 @@ def kontrol_et(sonuclar: dict) -> bool:
     return gecti
 
 
+def tahmin_et(model: dict, d: pd.DataFrame) -> np.ndarray:
+    """JSON'daki bir lineer modelin tahmini (C++'taki LinearModel::predict ile aynı)."""
+    x = ozellik_matrisi(d, model["ozellikler"])
+    return model["kesisim"] + x @ np.asarray(model["katsayilar"], dtype=float)
+
+
+def referansla_karsilastir(sonuclar: dict, referans: dict, test: pd.DataFrame,
+                           tolerans: float = 0.01) -> bool:
+    """Depodaki model ile yeni eğitilen model aynı test verisinde aynı toplamı vermeli."""
+    gecti = True
+    print("\nREFERANS KARSILASTIRMASI (depodaki model vs yeni egitilen, test kumesi)")
+    for ad, tanim in MODELLER.items():
+        if ad not in referans.get("modeller", {}):
+            print(f"  {ad}: referansta yok")
+            gecti = False
+            continue
+        te = test[tanim["filtre"](test)]
+        dt = adim_suresi(te)
+        yeni = float(np.sum(tahmin_et(sonuclar[ad], te) * dt))
+        eski = float(np.sum(tahmin_et(referans["modeller"][ad], te) * dt))
+        fark = (eski - yeni) / yeni if yeni != 0 else 0.0
+        durum = "tamam" if abs(fark) <= tolerans else "ESKIMIS"
+        print(f"  {ad:<30} fark = {100 * fark:+.2f}%  ({durum})")
+        if abs(fark) > tolerans:
+            gecti = False
+    if not gecti:
+        print("Depodaki katsayilar guncel fizikle uyusmuyor. Yeniden uretmek icin:\n"
+              "  hea_cli --cevrim egitim --egitim-verisi build/veri/egitim.csv\n"
+              "  hea_cli --cevrim test   --egitim-verisi build/veri/test.csv\n"
+              "  python model/egit.py && python model/cpp_aktar.py")
+    return gecti
+
+
 def main() -> int:
     kok = Path(__file__).resolve().parent.parent
     p = argparse.ArgumentParser(description="Tuketim tahmin modeli egitimi")
@@ -197,7 +244,14 @@ def main() -> int:
     p.add_argument("--grafik", type=Path, default=kok / "build/model")
     p.add_argument("--grafiksiz", action="store_true", help="grafik cizme")
     p.add_argument("--kontrol", action="store_true", help="esik altinda 1 ile cik")
+    p.add_argument("--referans", type=Path, default=None,
+                   help="depodaki model JSON'u; yeni modelden %%1'den fazla ayrisirsa 1 ile cik")
     a = p.parse_args()
+
+    # Referans, çıktı aynı dosyaya yazılmadan önce okunmalı
+    referans = None
+    if a.referans is not None:
+        referans = json.loads(a.referans.read_text(encoding="utf-8"))
 
     egitim = pd.read_csv(a.egitim)
     test = pd.read_csv(a.test)
@@ -232,9 +286,12 @@ def main() -> int:
     if grafik is not None:
         print(f"Grafikler: {grafik}")
 
+    sonuc = 0
     if a.kontrol and not kontrol_et(sonuclar):
-        return 1
-    return 0
+        sonuc = 1
+    if referans is not None and not referansla_karsilastir(sonuclar, referans, test):
+        sonuc = 1
+    return sonuc
 
 
 if __name__ == "__main__":

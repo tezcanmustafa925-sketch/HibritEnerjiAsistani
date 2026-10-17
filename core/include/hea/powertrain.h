@@ -10,7 +10,9 @@ namespace hea {
 
 // Aktarma organı (dişli) parametreleri.
 //
-// Mimari (paralel hibrit, basitleştirilmiş):
+// Mimari (paralel hibrit, basitleştirilmiş). Not: Prius gibi güç bölücülü
+// (power-split, planet dişli) hibritler modellenmiyor; bileşen boyutları o sınıfa
+// yakın ama mekanik bağlantı paralel hibrit gibidir.
 //   - İçten yanmalı motor -> kavrama -> 5 ileri vites kutusu -> diferansiyel -> tekerlek
 //   - Elektrik motoru -> sabit redüksiyon -> tekerlek aksı (vites kutusunun çıkışında)
 // İki motor da tekerleğe mekanik olarak bağlıdır; elektrik motoru devri her zaman
@@ -40,6 +42,8 @@ struct PowertrainRequest {
     // Bataryanın bu adımdaki sınırları [W] (pozitif büyüklük), bkz. Battery::available*
     double batteryMaxDischarge_W = 0.0;
     double batteryMaxCharge_W = 0.0;
+    // İçten yanmalı motor sıcaklığı [°C]; soğuk motorda sürtünme ve yakıt artar
+    double engineTemp_C = kEngineWarmTemp_C;
 };
 
 // Güç aktarma organının çözümü.
@@ -98,7 +102,8 @@ private:
     bool solveElectric(const PowertrainRequest& req, PowertrainResult& out) const;
     PowertrainResult solveEngine(const PowertrainRequest& req) const;
     // Engine modunda verilen eksen torku için en düşük yakıtlı vitesi arar.
-    bool bestGear(double axleTorque_Nm, double wheelSpeed_radps, PowertrainResult& out) const;
+    bool bestGear(double axleTorque_Nm, double wheelSpeed_radps, double engineTemp_C,
+                  PowertrainResult& out) const;
 
     ElectricMotor motor_;
     Engine engine_;

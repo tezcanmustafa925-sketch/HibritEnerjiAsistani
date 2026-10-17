@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 
 #include "hea/units.h"
 
@@ -11,6 +12,49 @@ namespace {
 // Bu hızın altı "duruyor" sayılır [m/s]
 constexpr double kStopSpeed = 1e-3;
 } // namespace
+
+// ---------------------------------------------------------------- HVAC
+
+bool HvacParams::isValid() const
+{
+    return deadband_K >= 0.0 && coolingCoeff_WperK >= 0.0 && heatingCoeff_WperK >= 0.0
+        && maxPower_W >= 0.0;
+}
+
+double HvacParams::power_W(double ambientTemp_C) const
+{
+    if (!enabled) {
+        return 0.0;
+    }
+    double p = 0.0;
+    if (ambientTemp_C > comfortTemp_C + deadband_K) {
+        p = coolingCoeff_WperK * (ambientTemp_C - comfortTemp_C);
+    } else if (ambientTemp_C < comfortTemp_C - deadband_K) {
+        p = heatingCoeff_WperK * (comfortTemp_C - ambientTemp_C);
+    }
+    return std::min(p, maxPower_W);
+}
+
+// ---------------------------------------------------------------- Doğrulama
+
+std::string SimulationConfig::validate() const
+{
+    if (!vehicle.isValid()) return "arac parametreleri gecersiz (kutle, Cd, alan, Crr, r > 0, delta >= 1)";
+    if (!battery.isValid()) return "batarya parametreleri gecersiz";
+    if (!motor.isValid()) return "elektrik motoru parametreleri gecersiz";
+    if (!engine.isValid()) return "icten yanmali motor parametreleri gecersiz";
+    if (!drivetrain.isValid()) return "aktarma organi parametreleri gecersiz";
+    if (!hvac.isValid()) return "klima parametreleri gecersiz";
+    if (!(initialSoc >= battery.socMin && initialSoc <= battery.socMax)) {
+        return "baslangic SOC'si batarya penceresinin (socMin..socMax) disinda";
+    }
+    if (!(auxiliaryPower_W >= 0.0)) return "yardimci yuk negatif olamaz";
+    if (!(tireRoadFriction > 0.0)) return "lastik-yol surtunme katsayisi pozitif olmali";
+    if (!(engineStartFuel_kg >= 0.0)) return "motor calistirma yakiti negatif olamaz";
+    return {};
+}
+
+// ---------------------------------------------------------------- Simulation
 
 Simulation::Simulation(const SimulationConfig& config, const DriveCycle& cycle,
                        Strategy& strategy)
@@ -23,11 +67,23 @@ Simulation::Simulation(const SimulationConfig& config, const DriveCycle& cycle,
                cycle.samples.empty() ? 25.0 : cycle.samples.front().ambientTemp_C)
     , speed_(cycle.samples.empty() ? 0.0 : cycle.samples.front().targetSpeed_mps)
 {
+    const std::string err = config.validate();
+    if (!err.empty()) {
+        throw std::invalid_argument("Gecersiz yapilandirma: " + err);
+    }
+    if (!(cycle.dt_s > 0.0)) {
+        throw std::invalid_argument("Cevrim '" + cycle.name + "': adim suresi pozitif olmali");
+    }
+    const double ambient0 = cycle.samples.empty() ? 25.0 : cycle.samples.front().ambientTemp_C;
+    engineTemp_C_ = config.engineColdStart ? ambient0 : std::max(kEngineWarmTemp_C, ambient0);
     strategy_.reset();
 }
 
 StepResult Simulation::step()
 {
+    if (finished()) {
+        throw std::logic_error("Simulation::step: cevrim bitti, adim kalmadi");
+    }
     const DriveInput& in = cycle_.samples[next_];
     const double dt = cycle_.dt_s;
     const double r = config_.vehicle.wheelRadius_m;
@@ -51,10 +107,13 @@ StepResult Simulation::step()
     const double wheelTorque = holding ? 0.0 : vehicle_.wheelTorque(load.total_N);
     const double wheelSpeed = vehicle_.wheelSpeed(vAvg);
 
-    // --- 2) Batarya sınırları (yardımcı yük düşülerek) ---
-    const double aux = config_.auxiliaryPower_W;
-    const double maxDischarge = std::max(0.0, battery_.availableDischargePower() - aux);
+    // --- 2) Batarya sınırları (yardımcı yük + klima düşülerek) ---
+    const double aux = config_.auxiliaryPower_W + config_.hvac.power_W(in.ambientTemp_C);
+    const double availDischarge = battery_.availableDischargePower();
+    const double maxDischarge = std::max(0.0, availDischarge - aux);
     const double maxCharge = battery_.availableChargePower() + aux;
+    // Batarya yardımcı yükü bile karşılayamıyorsa açık, motor çalışırsa jeneratörle üretilir
+    const double auxDeficit = std::max(0.0, aux - availDischarge);
 
     // --- 3) Strateji kararı ---
     StrategyInput si;
@@ -68,6 +127,7 @@ StepResult Simulation::step()
     si.wheelPower_W = wheelTorque * wheelSpeed;
     si.soc = battery_.soc();
     si.batteryTemp_C = battery_.temperature_C();
+    si.engineTemp_C = engineTemp_C_;
     si.batteryMaxDischarge_W = maxDischarge;
     si.batteryMaxCharge_W = maxCharge;
     const Decision decision = strategy_.decide(si);
@@ -77,9 +137,10 @@ StepResult Simulation::step()
     req.wheelTorque_Nm = wheelTorque;
     req.wheelSpeed_radps = wheelSpeed;
     req.requestedMode = decision.mode == Mode::Engine ? Mode::Engine : Mode::Electric;
-    req.chargePower_W = std::max(0.0, decision.chargePower_W);
+    req.chargePower_W = std::max(0.0, decision.chargePower_W) + auxDeficit;
     req.batteryMaxDischarge_W = maxDischarge;
     req.batteryMaxCharge_W = maxCharge;
+    req.engineTemp_C = engineTemp_C_;
     const PowertrainResult pt = powertrain_.resolve(req);
 
     // --- 5) Gerçekleşen hareket ---
@@ -94,16 +155,26 @@ StepResult Simulation::step()
     distance_ += 0.5 * (v0 + v1) * dt; // yamuk kuralı
 
     // --- 6) Batarya ve yakıt ---
-    const BatteryStep bs = battery_.step(pt.motorElectricalPower_W + aux, dt, in.ambientTemp_C);
+    const double batteryRequest = pt.motorElectricalPower_W + aux;
+    const BatteryStep bs = battery_.step(batteryRequest, dt, in.ambientTemp_C);
+    // Deşarj isteği kısıldıysa eksik kalan elektrik gücü (enerji dengesi için raporlanır)
+    out.unmetElectricalPower_W = batteryRequest > 0.0 ? std::max(0.0, batteryRequest - bs.power_W)
+                                                      : 0.0;
     fuelUsed_ += pt.fuelRate_kgps * dt;
-    // Motor çalıştırma cezası
-    const bool engineRunning = pt.fuelRate_kgps > 0.0;
+    // Motor dönüyor mu? Yakıt yakıyorsa ya da strateji motoru açık tutuyorken araç
+    // hareket ediyorsa (fren / inişte yakıt kesme). Dönmüyorken dönmeye başlarsa çalıştırma.
+    const bool engineRunning = pt.fuelRate_kgps > 0.0
+        || (req.requestedMode == Mode::Engine && pt.mode != Mode::Stopped && v1 > kStopSpeed);
+    out.engineRunning = engineRunning;
     out.engineStarted = engineRunning && !engineRunning_;
     if (out.engineStarted) {
         fuelUsed_ += config_.engineStartFuel_kg;
     }
     engineRunning_ = engineRunning;
     batteryEnergy_ += bs.power_W * dt;
+    // Motor ısıl modeli: yakıt gücünün bir kısmı motoru ısıtır, ortama ısı kaybı soğutur
+    engineTemp_C_ = powertrain_.engine().nextTemperature(
+        engineTemp_C_, pt.fuelRate_kgps * constants::kGasolineLhv, in.ambientTemp_C, dt);
 
     // --- 7) Sürücü pedalları (talepten türetilen göstergeler) ---
     if (wheelTorque > 0.0) {
@@ -135,6 +206,7 @@ StepResult Simulation::step()
     out.gear = pt.gear;
     out.engineSpeed_radps = pt.engineSpeed_radps;
     out.engineTorque_Nm = pt.engineTorque_Nm;
+    out.engineTemp_C = engineTemp_C_;
     out.motorSpeed_radps = pt.motorSpeed_radps;
     out.motorTorque_Nm = pt.motorTorque_Nm;
     out.motorElectricalPower_W = pt.motorElectricalPower_W;
@@ -146,6 +218,7 @@ StepResult Simulation::step()
     out.batteryCurrent_A = bs.current_A;
     out.batteryTemp_C = bs.temp_C;
     out.soc = bs.soc;
+    out.auxiliaryPower_W = aux;
 
     out.fuelRate_kgps = pt.fuelRate_kgps;
     out.fuelUsed_kg = fuelUsed_;
@@ -196,6 +269,8 @@ RunSummary summarize(const std::vector<StepResult>& steps, double initialSoc)
             s.regenEnergy_J += -r.motorElectricalPower_W * r.dt_s;
         }
         s.frictionBrakeEnergy_J += r.frictionBrakePower_W * r.dt_s;
+        s.auxiliaryEnergy_J += r.auxiliaryPower_W * r.dt_s;
+        s.unmetElectricalEnergy_J += r.unmetElectricalPower_W * r.dt_s;
         if (r.engineStarted) {
             ++s.engineStarts;
         }
@@ -210,10 +285,12 @@ RunSummary summarize(const std::vector<StepResult>& steps, double initialSoc)
     s.fuelPer100km_L = s.distance_m > 0.0 ? s.fuel_L * 1e5 / s.distance_m : 0.0;
     s.socEnd = last.soc;
     s.batteryEnergyUsed_J = last.batteryEnergyUsed_J;
-    s.timeElectric /= s.duration_s;
-    s.timeEngine /= s.duration_s;
-    s.timeRegen /= s.duration_s;
-    s.timeStopped /= s.duration_s;
+    if (s.duration_s > 0.0) {
+        s.timeElectric /= s.duration_s;
+        s.timeEngine /= s.duration_s;
+        s.timeRegen /= s.duration_s;
+        s.timeStopped /= s.duration_s;
+    }
     s.overriddenFraction = driving > 0
         ? static_cast<double>(overridden) / static_cast<double>(driving) : 0.0;
     return s;

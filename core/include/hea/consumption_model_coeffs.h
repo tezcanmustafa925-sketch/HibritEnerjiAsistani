@@ -24,9 +24,9 @@ struct LinearModelCoeffs {
 // EV secilseydi bataryadan cekilecek motor gucu [W]
 // Test: R2 = 1.0000, toplam hata = -0.00%
 inline const char* const kEvBatteryPowerFeatures[] = {"P", "T^2", "w", "w^3"};
-inline const double kEvBatteryPowerCoefficients[] = {1.030927835104975, 0.0024909660944154193, 7.999999971015081, 5.120000278517785e-05};
+inline const double kEvBatteryPowerCoefficients[] = {1.0309278350987199, 0.002490966094508427, 7.999999971282524, 5.1200002833416604e-05};
 inline const LinearModelCoeffs kEvBatteryPower = {
-    "ev_batarya_gucu_W", kEvBatteryPowerFeatures, kEvBatteryPowerCoefficients, 4, 200.00000053964868};
+    "ev_batarya_gucu_W", kEvBatteryPowerFeatures, kEvBatteryPowerCoefficients, 4, 200.00000053797248};
 
 // ICE secilseydi (sarjsiz) yakit debisi [kg/s]
 // Test: R2 = 0.9980, toplam hata = +0.02%

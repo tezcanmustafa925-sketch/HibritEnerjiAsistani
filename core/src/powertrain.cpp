@@ -146,7 +146,7 @@ bool Powertrain::solveElectric(const PowertrainRequest& req, PowertrainResult& o
     return true;
 }
 
-bool Powertrain::bestGear(double axleTorque_Nm, double wheelSpeed_radps,
+bool Powertrain::bestGear(double axleTorque_Nm, double wheelSpeed_radps, double engineTemp_C,
                           PowertrainResult& out) const
 {
     const DrivetrainParams& d = drivetrain_;
@@ -173,7 +173,7 @@ bool Powertrain::bestGear(double axleTorque_Nm, double wheelSpeed_radps,
         if (!engine_.canDeliver(tEngine, wEngine)) {
             continue;
         }
-        const double fuel = engine_.fuelRate(tEngine, wEngine);
+        const double fuel = engine_.fuelRate(tEngine, wEngine, engineTemp_C);
         if (!found || fuel < bestFuel) {
             found = true;
             bestFuel = fuel;
@@ -219,13 +219,14 @@ PowertrainResult Powertrain::solveEngine(const PowertrainRequest& req) const
     const double axleForCharge = -tGen * d.motorGearRatio / d.motorGearEfficiency;
 
     // --- En iyi vites: önce şarjlı, olmazsa şarjsız dene ---
-    if (bestGear(req.wheelTorque_Nm + axleForCharge, req.wheelSpeed_radps, out)) {
+    if (bestGear(req.wheelTorque_Nm + axleForCharge, req.wheelSpeed_radps, req.engineTemp_C,
+                 out)) {
         out.motorTorque_Nm = tGen;
         out.motorElectricalPower_W = pGen;
         out.deliveredWheelTorque_Nm = req.wheelTorque_Nm;
         return out;
     }
-    if (tGen != 0.0 && bestGear(req.wheelTorque_Nm, req.wheelSpeed_radps, out)) {
+    if (tGen != 0.0 && bestGear(req.wheelTorque_Nm, req.wheelSpeed_radps, req.engineTemp_C, out)) {
         out.deliveredWheelTorque_Nm = req.wheelTorque_Nm;
         return out;
     }
@@ -251,7 +252,7 @@ PowertrainResult Powertrain::solveEngine(const PowertrainRequest& req) const
             out.clutchSlip = slip;
             out.engineSpeed_radps = wEngine;
             out.engineTorque_Nm = tMax;
-            out.fuelRate_kgps = engine_.fuelRate(tMax, wEngine);
+            out.fuelRate_kgps = engine_.fuelRate(tMax, wEngine, req.engineTemp_C);
         }
     }
 

@@ -19,14 +19,15 @@ bool writeStepsCsv(const std::string& path, const std::vector<RunRecord>& runs)
                  "motor_speed_radps,motor_torque_Nm,motor_electrical_power_W,"
                  "friction_brake_power_W,battery_power_W,battery_voltage_V,"
                  "battery_current_A,battery_temp_C,soc,fuel_rate_kgps,fuel_used_kg,"
-                 "battery_energy_used_J\n");
+                 "battery_energy_used_J,engine_running,engine_temp_C,auxiliary_power_W,"
+                 "unmet_electrical_power_W\n");
     for (const RunRecord& run : runs) {
         for (const hea::StepResult& r : run.steps) {
             // %.9g: double için yeterli hassasiyet, gereksiz sıfır yok
             std::fprintf(f,
                          "%s,%s,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,"
                          "%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%s,%s,%d,%d,%d,%.9g,%.9g,%.9g,%.9g,"
-                         "%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g\n",
+                         "%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%d,%.9g,%.9g,%.9g\n",
                          run.cycle.c_str(), run.strategy.c_str(), r.time_s, r.dt_s,
                          r.targetSpeed_mps, r.speed_mps, r.acceleration_mps2, r.distance_m,
                          r.grade_rad, r.payload_kg, r.throttle, r.brake, r.aeroForce_N,
@@ -38,7 +39,8 @@ bool writeStepsCsv(const std::string& path, const std::vector<RunRecord>& runs)
                          r.motorTorque_Nm, r.motorElectricalPower_W, r.frictionBrakePower_W,
                          r.batteryPower_W, r.batteryVoltage_V, r.batteryCurrent_A,
                          r.batteryTemp_C, r.soc, r.fuelRate_kgps, r.fuelUsed_kg,
-                         r.batteryEnergyUsed_J);
+                         r.batteryEnergyUsed_J, r.engineRunning ? 1 : 0, r.engineTemp_C,
+                         r.auxiliaryPower_W, r.unmetElectricalPower_W);
         }
     }
     const bool ok = std::ferror(f) == 0;
@@ -52,8 +54,9 @@ bool writeTrainingCsv(const std::string& path, const std::vector<hea::TrainingSa
         return false;
     }
     std::fprintf(f,
-                 "cycle,time_s,speed_mps,acceleration_mps2,grade_rad,payload_kg,"
+                 "cycle,time_s,dt_s,speed_mps,acceleration_mps2,grade_rad,payload_kg,"
                  "wheel_torque_Nm,wheel_speed_radps,wheel_power_W,soc,battery_temp_C,"
+                 "engine_temp_C,"
                  "battery_max_discharge_W,battery_max_charge_W,"
                  "ev_feasible,ev_battery_power_W,"
                  "ice_feasible,ice_fuel_rate_kgps,ice_gear,"
@@ -61,11 +64,12 @@ bool writeTrainingCsv(const std::string& path, const std::vector<hea::TrainingSa
     for (const hea::TrainingSample& s : samples) {
         const hea::StrategyInput& in = s.in;
         std::fprintf(f,
-                     "%s,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,"
+                     "%s,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,"
                      "%d,%.9g,%d,%.9g,%d,%.9g,%.9g\n",
-                     s.cycle.c_str(), in.time_s, in.speed_mps, in.acceleration_mps2,
+                     s.cycle.c_str(), in.time_s, s.dt_s, in.speed_mps, in.acceleration_mps2,
                      in.grade_rad, in.payload_kg, in.wheelTorque_Nm, in.wheelSpeed_radps,
-                     in.wheelPower_W, in.soc, in.batteryTemp_C, in.batteryMaxDischarge_W,
+                     in.wheelPower_W, in.soc, in.batteryTemp_C, in.engineTemp_C,
+                     in.batteryMaxDischarge_W,
                      in.batteryMaxCharge_W, s.evFeasible ? 1 : 0, s.evBatteryPower_W,
                      s.iceFeasible ? 1 : 0, s.iceFuelRate_kgps, s.iceGear,
                      s.iceChargePower_W, s.iceChargeFuelRate_kgps);

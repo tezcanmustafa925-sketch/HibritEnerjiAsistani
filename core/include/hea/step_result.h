@@ -43,6 +43,8 @@ struct StepResult {
     bool modeOverridden = false;    // Öneri uygulanamadı mı? (ör. EV gücü yetmedi)
     int gear = 0;                   // Vites (ICE kapalıysa 0)
     bool engineStarted = false;     // Motor bu adımda çalıştırıldı mı?
+    bool engineRunning = false;     // Motor bu adımda dönüyor mu? (yakıt yakıyor ya da DFCO)
+    double engineTemp_C = 0.0;      // Motor sıcaklığı (adım sonu) [°C]
     double engineSpeed_radps = 0.0; // İçten yanmalı motor devri [rad/s]
     double engineTorque_Nm = 0.0;   // İçten yanmalı motor torku [Nm]
     double motorSpeed_radps = 0.0;  // Elektrik motoru devri [rad/s]
@@ -56,6 +58,10 @@ struct StepResult {
     double batteryCurrent_A = 0.0;  // Akım [A]; pozitif = deşarj, negatif = şarj
     double batteryTemp_C = 0.0;     // Sıcaklık [°C] (SI istisnası, kullanıcı onaylı)
     double soc = 0.0;               // Şarj durumu [0..1] (adım sonu)
+    double auxiliaryPower_W = 0.0;  // Yardımcı yük + klima [W]
+    // Bataryanın sınırı yüzünden karşılanamayan elektrik gücü [W] (>= 0).
+    // Normalde 0; SOC alt sınırdayken yardımcı yük karşılanamazsa pozitif olur.
+    double unmetElectricalPower_W = 0.0;
 
     // --- Tüketim ---
     double fuelRate_kgps = 0.0;        // Anlık yakıt debisi [kg/s]

@@ -51,7 +51,9 @@ static void testCounterfactualsMatchActualRuns()
     // Sabit EV stratejisiyle sürülen adımlarda karşı-olgusal EV gücü, simülasyonda
     // gerçekleşen motor gücüne eşit olmalı (aynı talep, aynı batarya sınırları).
     const DriveCycle c = makeUrbanCycle(2);
-    const SimulationConfig cfg;
+    // Karşı-olgusal çözümler sıcak motorla yapılır; karşılaştırma için motor sıcak başlar
+    SimulationConfig cfg;
+    cfg.engineColdStart = false;
     {
         FixedModeStrategy ev(Mode::Electric);
         const auto steps = runCycle(cfg, c, ev);
@@ -82,7 +84,9 @@ static void testCounterfactualsMatchActualRuns()
         std::size_t k = 0;
         for (const StepResult& r : steps) {
             if (k < samples.size() && samples[k].in.time_s == r.time_s) {
-                if (samples[k].iceFeasible) {
+                // Duraklarda motor soğuyabilir; yalnızca tam sıcak adımlar karşılaştırılır
+                if (samples[k].iceFeasible
+                    && samples[k].in.engineTemp_C >= kEngineWarmTemp_C - 1e-9) {
                     HEA_CHECK_NEAR(samples[k].iceFuelRate_kgps, r.fuelRate_kgps, 1e-15);
                     HEA_CHECK(samples[k].iceGear == r.gear);
                     ++matched;
