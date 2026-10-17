@@ -81,6 +81,7 @@ struct SocCorrectedFuel {
 std::vector<double> defaultCorrectionSocs();
 
 // Stratejiyi her başlangıç SOC'si için çalıştırıp doğrusal SOC düzeltmesi yapar.
+// Batarya penceresinin (socMin..socMax) dışındaki başlangıç SOC'leri atlanır.
 SocCorrectedFuel socCorrectedFuel(const SimulationConfig& config, const DriveCycle& cycle,
                                   Strategy& strategy,
                                   const std::vector<double>& initialSocs = defaultCorrectionSocs());

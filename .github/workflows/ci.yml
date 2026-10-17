@@ -1,0 +1,32 @@
+# Her push ve pull request'te derle ve tüm testleri çalıştır (Windows + Linux).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  derle-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Python paketleri
+        run: pip install -r model/requirements.txt
+
+      - name: Yapilandir
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHEA_BUILD_TESTS=ON
+
+      - name: Derle
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure

@@ -3,7 +3,9 @@
 add_library(hea_core STATIC
     src/battery.cpp
     src/comparison.cpp
+    src/config_file.cpp
     src/consumption_model.cpp
+    src/cycle_io.cpp
     src/drive_cycle.cpp
     src/electric_motor.cpp
     src/engine.cpp
@@ -25,3 +27,6 @@ target_include_directories(hea_core PUBLIC
 )
 
 target_compile_features(hea_core PUBLIC cxx_std_17)
+
+# Sürüm tek kaynaktan: kök CMakeLists.txt'deki project(VERSION ...)
+target_compile_definitions(hea_core PUBLIC HEA_VERSION_STRING="${PROJECT_VERSION}")

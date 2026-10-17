@@ -78,4 +78,57 @@ bool writeTrainingCsv(const std::string& path, const std::vector<hea::TrainingSa
     return std::fclose(f) == 0 && ok;
 }
 
+bool writeSummaryCsv(const std::string& path, const std::vector<RunRecord>& runs)
+{
+    std::FILE* f = std::fopen(path.c_str(), "w");
+    if (f == nullptr) {
+        return false;
+    }
+    std::fprintf(f,
+                 "cycle,strategy,duration_s,distance_m,fuel_kg,fuel_L,fuel_per_100km_L,"
+                 "soc_start,soc_end,battery_energy_used_J,regen_energy_J,"
+                 "friction_brake_energy_J,auxiliary_energy_J,unmet_electrical_energy_J,"
+                 "time_electric,time_engine,time_regen,time_stopped,overridden_fraction,"
+                 "engine_starts,max_speed_error_mps\n");
+    for (const RunRecord& run : runs) {
+        const hea::RunSummary& s = run.summary;
+        std::fprintf(f,
+                     "%s,%s,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,"
+                     "%.9g,%.9g,%.9g,%.9g,%.9g,%d,%.9g\n",
+                     run.cycle.c_str(), run.strategy.c_str(), s.duration_s, s.distance_m,
+                     s.fuel_kg, s.fuel_L, s.fuelPer100km_L, s.socStart, s.socEnd,
+                     s.batteryEnergyUsed_J, s.regenEnergy_J, s.frictionBrakeEnergy_J,
+                     s.auxiliaryEnergy_J, s.unmetElectricalEnergy_J, s.timeElectric,
+                     s.timeEngine, s.timeRegen, s.timeStopped, s.overriddenFraction,
+                     s.engineStarts, s.maxSpeedError_mps);
+    }
+    const bool ok = std::ferror(f) == 0;
+    return std::fclose(f) == 0 && ok;
+}
+
+bool writeComparisonCsv(const std::string& path, const std::vector<ComparisonRow>& rows)
+{
+    std::FILE* f = std::fopen(path.c_str(), "w");
+    if (f == nullptr) {
+        return false;
+    }
+    std::fprintf(f,
+                 "cycle,strategy,distance_m,raw_fuel_kg,raw_fuel_per_100km_L,raw_soc_start,"
+                 "raw_soc_end,raw_stored_energy_J,corrected_fuel_kg,"
+                 "corrected_fuel_per_100km_L,corrected_r2,local_slope_kg_per_J,"
+                 "extrapolated,equivalent_fuel_kg,equivalent_fuel_per_100km_L\n");
+    for (const ComparisonRow& r : rows) {
+        const double eq = hea::equivalentFuel_kg(r.raw.fuel_kg, r.rawStoredEnergy_J);
+        std::fprintf(f,
+                     "%s,%s,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%d,%.9g,%.9g\n",
+                     r.cycle.c_str(), r.strategy.c_str(), r.raw.distance_m, r.raw.fuel_kg,
+                     r.raw.fuelPer100km_L, r.raw.socStart, r.raw.socEnd, r.rawStoredEnergy_J,
+                     r.corrected.fuel_kg(), r.corrected.fuelPer100km_L(), r.corrected.fit.r2,
+                     r.corrected.localSlope_kgPerJ, r.corrected.extrapolated ? 1 : 0, eq,
+                     hea::litersPer100km(eq, r.raw.distance_m));
+    }
+    const bool ok = std::ferror(f) == 0;
+    return std::fclose(f) == 0 && ok;
+}
+
 } // namespace cli

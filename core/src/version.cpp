@@ -4,7 +4,7 @@ namespace hea {
 
 const char* coreVersion()
 {
-    return "0.1.0";
+    return HEA_VERSION_STRING; // CMake project(VERSION ...) değerinden gelir
 }
 
 } // namespace hea
