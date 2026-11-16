@@ -1,50 +1,26 @@
 #include "csv_export.h"
 
 #include <cstdio>
+#include <fstream>
+
+#include "result_csv.h"
 
 namespace cli {
 
+// Adım ve karşılaştırma CSV'lerinin satırları ortak koddan (apps/common/result_csv):
+// arayüzün "CSV olarak kaydet"i de aynı biçimi yazar
 bool writeStepsCsv(const std::string& path, const std::vector<RunRecord>& runs)
 {
-    std::FILE* f = std::fopen(path.c_str(), "w");
-    if (f == nullptr) {
+    std::ofstream f(path); // metin kipi: Windows'ta satır sonu CRLF (önceki fopen "w" gibi)
+    if (!f) {
         return false;
     }
-    std::fprintf(f,
-                 "cycle,strategy,time_s,dt_s,target_speed_mps,speed_mps,acceleration_mps2,"
-                 "distance_m,grade_rad,payload_kg,throttle,brake,aero_force_N,"
-                 "rolling_force_N,grade_force_N,inertia_force_N,traction_force_N,"
-                 "wheel_torque_Nm,wheel_power_W,unmet_wheel_torque_Nm,requested_mode,mode,"
-                 "mode_overridden,gear,engine_started,engine_speed_radps,engine_torque_Nm,"
-                 "motor_speed_radps,motor_torque_Nm,motor_electrical_power_W,"
-                 "friction_brake_power_W,battery_power_W,battery_voltage_V,"
-                 "battery_current_A,battery_temp_C,soc,fuel_rate_kgps,fuel_used_kg,"
-                 "battery_energy_used_J,engine_running,engine_temp_C,auxiliary_power_W,"
-                 "unmet_electrical_power_W\n");
+    hea_csv::writeStepsHeader(f);
     for (const RunRecord& run : runs) {
-        for (const hea::StepResult& r : run.steps) {
-            // %.9g: double için yeterli hassasiyet, gereksiz sıfır yok
-            std::fprintf(f,
-                         "%s,%s,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,"
-                         "%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%s,%s,%d,%d,%d,%.9g,%.9g,%.9g,%.9g,"
-                         "%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%d,%.9g,%.9g,%.9g\n",
-                         run.cycle.c_str(), run.strategy.c_str(), r.time_s, r.dt_s,
-                         r.targetSpeed_mps, r.speed_mps, r.acceleration_mps2, r.distance_m,
-                         r.grade_rad, r.payload_kg, r.throttle, r.brake, r.aeroForce_N,
-                         r.rollingForce_N, r.gradeForce_N, r.inertiaForce_N, r.tractionForce_N,
-                         r.wheelTorque_Nm, r.wheelPower_W, r.unmetWheelTorque_Nm,
-                         hea::modeName(r.requestedMode), hea::modeName(r.mode),
-                         r.modeOverridden ? 1 : 0, r.gear, r.engineStarted ? 1 : 0,
-                         r.engineSpeed_radps, r.engineTorque_Nm, r.motorSpeed_radps,
-                         r.motorTorque_Nm, r.motorElectricalPower_W, r.frictionBrakePower_W,
-                         r.batteryPower_W, r.batteryVoltage_V, r.batteryCurrent_A,
-                         r.batteryTemp_C, r.soc, r.fuelRate_kgps, r.fuelUsed_kg,
-                         r.batteryEnergyUsed_J, r.engineRunning ? 1 : 0, r.engineTemp_C,
-                         r.auxiliaryPower_W, r.unmetElectricalPower_W);
-        }
+        hea_csv::writeStepRows(f, run.cycle, run.strategy, run.steps);
     }
-    const bool ok = std::ferror(f) == 0;
-    return std::fclose(f) == 0 && ok;
+    f.close();
+    return !f.fail();
 }
 
 bool writeTrainingCsv(const std::string& path, const std::vector<hea::TrainingSample>& samples)
@@ -108,27 +84,17 @@ bool writeSummaryCsv(const std::string& path, const std::vector<RunRecord>& runs
 
 bool writeComparisonCsv(const std::string& path, const std::vector<ComparisonRow>& rows)
 {
-    std::FILE* f = std::fopen(path.c_str(), "w");
-    if (f == nullptr) {
+    std::ofstream f(path);
+    if (!f) {
         return false;
     }
-    std::fprintf(f,
-                 "cycle,strategy,distance_m,raw_fuel_kg,raw_fuel_per_100km_L,raw_soc_start,"
-                 "raw_soc_end,raw_stored_energy_J,corrected_fuel_kg,"
-                 "corrected_fuel_per_100km_L,corrected_r2,local_slope_kg_per_J,"
-                 "extrapolated,equivalent_fuel_kg,equivalent_fuel_per_100km_L\n");
+    hea_csv::writeComparisonHeader(f);
     for (const ComparisonRow& r : rows) {
-        const double eq = hea::equivalentFuel_kg(r.raw.fuel_kg, r.rawStoredEnergy_J);
-        std::fprintf(f,
-                     "%s,%s,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%d,%.9g,%.9g\n",
-                     r.cycle.c_str(), r.strategy.c_str(), r.raw.distance_m, r.raw.fuel_kg,
-                     r.raw.fuelPer100km_L, r.raw.socStart, r.raw.socEnd, r.rawStoredEnergy_J,
-                     r.corrected.fuel_kg(), r.corrected.fuelPer100km_L(), r.corrected.fit.r2,
-                     r.corrected.localSlope_kgPerJ, r.corrected.extrapolated ? 1 : 0, eq,
-                     hea::litersPer100km(eq, r.raw.distance_m));
+        hea_csv::writeComparisonRow(f, r.cycle, r.strategy, r.raw, r.rawStoredEnergy_J,
+                                    r.corrected);
     }
-    const bool ok = std::ferror(f) == 0;
-    return std::fclose(f) == 0 && ok;
+    f.close();
+    return !f.fail();
 }
 
 } // namespace cli

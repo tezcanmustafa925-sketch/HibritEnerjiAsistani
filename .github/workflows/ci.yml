@@ -1,4 +1,7 @@
 # Her push ve pull request'te derle ve tüm testleri çalıştır (Windows + Linux).
+# Windows'ta grafik arayüzlü dağıtım paketi (zip) de üretilir ve çalıştırmanın
+# "Artifacts" bölümünden indirilebilir. "v" ile başlayan bir etiket gönderilince
+# (ör. v0.3.0) testler geçerse zip GitHub Releases sayfasına yüklenir.
 name: CI
 
 on:
@@ -13,9 +16,9 @@ jobs:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -30,3 +33,73 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
+
+  arayuz-paket:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # ImGui, ImPlot ve GLFW ilk yapılandırmada git ile indirilir (FetchContent)
+      - name: Yapilandir (grafik arayuzlu)
+        run: cmake -S . -B build -DHEA_BUILD_GUI=ON -DHEA_BUILD_TESTS=ON
+
+      - name: Derle
+        run: cmake --build build --config Release --parallel
+
+      # GitHub'ın Windows sanal makinelerinde OpenGL 3 yok: arayüzü çizen testler
+      # (gui_ekran etiketi) yerelde çalıştırılır. Arayüz mantığı (test_gui_session) ve
+      # exe'lerin DLL bağımlılığı denetimi (paket_dll_bagimliliklari) burada da çalışır.
+      - name: Test (ekran karti gerektirenler haric)
+        run: ctest --test-dir build -C Release --output-on-failure -LE gui_ekran
+
+      - name: Paketle
+        run: cpack --config build/CPackConfig.cmake -C Release
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: hea-windows-x64
+          path: build/paket/*.zip
+          if-no-files-found: error
+
+  yayinla:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [derle-test, arayuz-paket]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: hea-windows-x64
+          path: paket
+
+      # Etiket (ör. v0.3.0) kök CMakeLists.txt'deki project(VERSION) ile aynı olmalı
+      - name: Etiket ve surum uyumu
+        run: |
+          zip="paket/HibritEnerjiAsistani-${GITHUB_REF_NAME#v}-windows-x64.zip"
+          if [ ! -f "$zip" ]; then
+            echo "::error::Etiket $GITHUB_REF_NAME, CMakeLists.txt surumuyle uyusmuyor. Paket: $(ls paket)"
+            exit 1
+          fi
+
+      - name: Release olustur
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notlar.md <<'EOF'
+          ## Windows'ta çalıştırma
+
+          1. Aşağıdaki **Assets** bölümünden `HibritEnerjiAsistani-...-windows-x64.zip` dosyasını indirin.
+          2. Bir klasöre çıkarın (sağ tık > "Tümünü ayıkla").
+          3. `hea_gui.exe` dosyasına çift tıklayın.
+
+          Kurulum gerekmez. Gerekenler: Windows 10/11 (64 bit) ve OpenGL 3.0 destekli ekran kartı sürücüsü.
+          Windows "kişisel bilgisayarınızı korudu" uyarısı gösterirse: "Ek bilgi" > "Yine de çalıştır".
+          Ayrıntılar zip içindeki `BENIOKU.txt` dosyasında.
+          EOF
+          gh release create "$GITHUB_REF_NAME" paket/*.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "Akıllı Hibrit Enerji Asistanı $GITHUB_REF_NAME" \
+            --notes-file notlar.md \
+            --generate-notes

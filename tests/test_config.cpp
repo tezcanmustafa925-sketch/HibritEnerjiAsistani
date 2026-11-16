@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdio>
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -163,6 +164,41 @@ static void testCycleCsv()
     std::remove("test_cevrim_hatali.csv");
 }
 
+// Akıştan okuma: dosyayı çağıran açar (arayüz Türkçe karakterli yollar için kullanır)
+static void testStreamOverloads()
+{
+    std::istringstream csv("time_s,speed_kmh\n0,0\n4,36\n");
+    const DriveCycle c = loadCycleCsv(csv, "C:\\yol\\tepe_yolu.csv");
+    HEA_CHECK(c.name == "tepe_yolu"); // ad, kaynak adından (uzantısız)
+    HEA_CHECK(c.samples.size() == 5);
+    HEA_CHECK_NEAR(c.samples[4].targetSpeed_mps, 10.0, 1e-12);
+
+    // Hata mesajı kaynak adını ve satırı içerir
+    std::istringstream badCsv("time_s,speed_kmh\n0,0\n1,abc\n");
+    std::string msg;
+    try {
+        loadCycleCsv(badCsv, "kaynak.csv");
+    } catch (const std::runtime_error& e) {
+        msg = e.what();
+    }
+    HEA_CHECK(msg.find("kaynak.csv:3:") != std::string::npos);
+
+    std::istringstream ini("[simulasyon]\nbaslangic_soc = 0.5\n[klima]\nacik = hayir\n");
+    FullConfig cfg;
+    loadConfigFile(ini, "ayar.ini", cfg);
+    HEA_CHECK_NEAR(cfg.sim.initialSoc, 0.5, 0.0);
+    HEA_CHECK(!cfg.sim.hvac.enabled);
+
+    std::istringstream badIni("[simulasyon]\nboyle_anahtar_yok = 1\n");
+    msg.clear();
+    try {
+        loadConfigFile(badIni, "ayar.ini", cfg);
+    } catch (const std::runtime_error& e) {
+        msg = e.what();
+    }
+    HEA_CHECK(msg.find("ayar.ini:2") != std::string::npos);
+}
+
 static void testNedc()
 {
     const DriveCycle c = makeNedcCycle();
@@ -186,6 +222,7 @@ int main()
     testFileRoundTrip();
     testFileSyntax();
     testCycleCsv();
+    testStreamOverloads();
     testNedc();
     return HEA_TEST_RESULT();
 }

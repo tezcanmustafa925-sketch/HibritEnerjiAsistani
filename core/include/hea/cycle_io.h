@@ -1,5 +1,6 @@
 #pragma once
 
+#include <istream>
 #include <string>
 #include <vector>
 
@@ -36,5 +37,10 @@ std::vector<DriveCycle> standardCycles();
 // negatif hız) satır numarasıyla birlikte std::runtime_error fırlatır.
 // ----------------------------------------------------------------------------
 DriveCycle loadCycleCsv(const std::string& path, double dt_s = 1.0);
+
+// Aynı okuma, açılmış bir akıştan. sourceName hata mesajlarında ve çevrim adında
+// (uzantısız dosya adı) kullanılır. Dosyayı çağıran açar: örneğin arayüz, Türkçe
+// karakterli Windows yollarını std::filesystem::path ile açıp buraya verir.
+DriveCycle loadCycleCsv(std::istream& in, const std::string& sourceName, double dt_s = 1.0);
 
 } // namespace hea

@@ -216,6 +216,12 @@ void loadConfigFile(const std::string& path, FullConfig& cfg)
     if (!f) {
         throw std::runtime_error(path + ": dosya acilamadi");
     }
+    loadConfigFile(f, path, cfg);
+}
+
+// path burada yalnızca kaynağın adıdır (hata mesajları için)
+void loadConfigFile(std::istream& f, const std::string& path, FullConfig& cfg)
+{
     std::string section;
     std::string line;
     int lineNo = 0;

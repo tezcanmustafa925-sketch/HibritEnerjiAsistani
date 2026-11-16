@@ -1,5 +1,6 @@
 #pragma once
 
+#include <istream>
 #include <string>
 
 #include "hea/model_based_strategy.h"
@@ -47,6 +48,9 @@ void applyConfigAssignment(FullConfig& cfg, const std::string& assignment);
 // std::runtime_error fırlatır. Değerlerin birlikte geçerliliği burada denetlenmez;
 // çağıran validate() ile denetlemelidir.
 void loadConfigFile(const std::string& path, FullConfig& cfg);
+
+// Aynı okuma, açılmış bir akıştan; sourceName hata mesajlarında kullanılır.
+void loadConfigFile(std::istream& in, const std::string& sourceName, FullConfig& cfg);
 
 // Tüm anahtarları açıklamaları ve mevcut değerleriyle, yeniden okunabilir
 // biçimde metne döker.

@@ -148,6 +148,15 @@ DriveCycle loadCycleCsv(const std::string& path, double dt_s)
     if (!f) {
         throw std::runtime_error(path + ": dosya acilamadi");
     }
+    return loadCycleCsv(f, path, dt_s);
+}
+
+// path burada yalnızca kaynağın adıdır (hata mesajları ve çevrim adı için)
+DriveCycle loadCycleCsv(std::istream& f, const std::string& path, double dt_s)
+{
+    if (!(dt_s > 0.0)) {
+        throw std::invalid_argument("loadCycleCsv: dt_s pozitif olmali");
+    }
 
     std::map<std::string, std::size_t> col;
     std::vector<RawSample> raw;
