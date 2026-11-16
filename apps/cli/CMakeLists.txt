@@ -6,7 +6,10 @@ add_executable(hea_cli
     tables.cpp
 )
 
-target_link_libraries(hea_cli PRIVATE hea_core)
+target_link_libraries(hea_cli PRIVATE hea_core hea_result_csv)
+
+# Dağıtım paketinde (zip) kök klasöre
+install(TARGETS hea_cli RUNTIME DESTINATION .)
 
 if(MSVC)
     # fopen gibi standart C fonksiyonları için MSVC'nin "güvensiz" uyarısını kapat

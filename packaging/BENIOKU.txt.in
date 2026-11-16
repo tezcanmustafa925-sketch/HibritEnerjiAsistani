@@ -1,0 +1,63 @@
+﻿AKILLI HİBRİT ENERJİ ASİSTANI  -  sürüm @PROJECT_VERSION@ (Windows, 64 bit)
+==========================================================================
+
+Hibrit bir aracın enerji yönetimini (motor ne zaman çalışsın, batarya ne
+zaman şarj edilsin) simüle eden ve dört stratejiyi adil biçimde
+karşılaştıran program.
+
+
+ÇALIŞTIRMA
+----------
+1. Zip dosyasını bir klasöre çıkarın (sağ tık > "Tümünü ayıkla").
+   Programı zip'in içinden çalıştırmayın.
+2. hea_gui.exe dosyasına çift tıklayın.
+
+Kurulum gerekmez: her şey exe'nin içindedir (Visual C++ paketi, DLL ya da
+yazı tipi kurmanız gerekmez).
+
+Program imzalı olmadığı için Windows ilk açılışta "Windows kişisel
+bilgisayarınızı korudu" uyarısı gösterebilir: "Ek bilgi" > "Yine de
+çalıştır" deyin.
+
+
+GEREKENLER
+----------
+- Windows 10 ya da 11, 64 bit
+- OpenGL 3.0 destekleyen ekran kartı sürücüsü (son ~10 yılın
+  bilgisayarlarında vardır). Program açılamazsa nedenini bir hata kutusuyla
+  bildirir; genellikle ekran kartı sürücüsünü güncellemek yeter. Uzak Masaüstü
+  bağlantısında ya da sanal makinede grafik arayüz açılmayabilir.
+
+
+DOSYALAR
+--------
+hea_gui.exe   Grafik arayüz
+hea_cli.exe   Terminal sürümü. Komut isteminden çalıştırılır, OpenGL
+              gerektirmez. Seçenekler: hea_cli --yardim
+data\         Örnek ayar dosyası (ornek_ayar.ini) ve örnek sürüş çevrimi
+              (cevrimler\ornek_tepe_yolu.csv). Arayüzde "Yükle..." ve
+              "CSV dosyasından çevrim ekle..." düğmeleriyle açılır.
+lisanslar\    Programa gömülü açık kaynak bileşenlerin lisansları
+
+
+KISACA KULLANIM
+---------------
+- Sol panel: çevrim, strateji, başlangıç SOC'si, ortam koşulları, ayar
+  dosyası.
+- Çalıştır (F5): seçili ayarlarla simülasyon; sonuçlar ve grafikler sağda.
+- Canlı oynat: simülasyonu hızlandırılmış gerçek zamanda izleyin.
+  Boşluk tuşu duraklatır / sürdürür, hız kaydırıcısı 1-100 kat.
+- "Strateji karşılaştırması" sekmesi: dört strateji, batarya farkı
+  düzeltilmiş (adil) yakıt tüketimiyle yan yana.
+- "CSV olarak kaydet" / "Görüntü kaydet": sonuçları Excel / Python için
+  CSV'ye, ekranı PNG resmine kaydeder.
+
+
+AÇIK KAYNAK BİLEŞENLER
+----------------------
+Dear ImGui (MIT), ImPlot (MIT), GLFW (zlib), Roboto Medium yazı tipi
+(Christian Robertson, Apache 2.0). Lisans metinleri: lisanslar\
+
+
+Kaynak kod ve ayrıntılı açıklama:
+https://github.com/tezcanmustafa925-sketch/HibritEnerjiAsistani
